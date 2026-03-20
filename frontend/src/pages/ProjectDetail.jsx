@@ -1,0 +1,290 @@
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import {
+  getProject, getProjectHours, addProjectHours, deleteProjectHours,
+  uploadQuote, getCollaborators
+} from '../utils/api';
+import { fmtUSD, fmtUYU, fmtDate, fmtNum } from '../utils/helpers';
+import { Icon, StatusBadge, RazonBadge, CurrencyBadge, ConditionBadge, LoadingPage, ConfirmDialog, toast } from '../components/UI';
+
+export default function ProjectDetail() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [project, setProject] = useState(null);
+  const [hours, setHours] = useState({ entries: [], totals: [] });
+  const [collaborators, setCollaborators] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [addingHours, setAddingHours] = useState(false);
+  const [hourForm, setHourForm] = useState({ collaborator_id: '', hours: '', date: '', description: '' });
+  const [savingHours, setSavingHours] = useState(false);
+  const [deleteHourId, setDeleteHourId] = useState(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [p, h, c] = await Promise.all([getProject(id), getProjectHours(id), getCollaborators()]);
+      setProject(p);
+      setHours(h);
+      setCollaborators(c);
+    } catch (e) { toast(e.message, 'error'); navigate('/projects'); }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, [id]);
+
+  if (loading) return <LoadingPage />;
+  if (!project) return null;
+
+  const hourCollabs = (project.owners || [])
+    .filter(o => o.owner_type === 'Colaborador')
+    .map(o => collaborators.find(c => c.id == o.collaborator_id))
+    .filter(c => c?.condition === 'Contratado por horas');
+
+  const handleAddHours = async () => {
+    if (!hourForm.collaborator_id || !hourForm.hours) return toast('Colaborador y horas son obligatorios', 'error');
+    setSavingHours(true);
+    try {
+      await addProjectHours(id, hourForm);
+      toast('Horas registradas');
+      setHourForm({ collaborator_id: '', hours: '', date: '', description: '' });
+      setAddingHours(false);
+      load();
+    } catch (e) { toast(e.message, 'error'); }
+    setSavingHours(false);
+  };
+
+  const handleDeleteHours = async () => {
+    try { await deleteProjectHours(id, deleteHourId); toast('Horas eliminadas'); setDeleteHourId(null); load(); }
+    catch (e) { toast(e.message, 'error'); }
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingFile(true);
+    try { await uploadQuote(id, file); toast('Cotización subida'); load(); }
+    catch (e) { toast(e.message, 'error'); }
+    setUploadingFile(false);
+  };
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="page-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button className="btn btn-ghost btn-sm" onClick={() => navigate('/projects')}>
+            <Icon name="chevronRight" size={14} style={{ transform: 'rotate(180deg)' }} /> Volver
+          </button>
+          <div>
+            <h2>{project.name}</h2>
+            <div style={{ display: 'flex', gap: 8, marginTop: 4, alignItems: 'center' }}>
+              <StatusBadge status={project.status} />
+              {project.razon_social && <RazonBadge razon={project.razon_social} />}
+              {project.currency && <CurrencyBadge currency={project.currency} />}
+              {project.type && <span className="badge badge-neutral">{project.type}</span>}
+            </div>
+          </div>
+        </div>
+        <Link to="/projects" className="btn btn-secondary" onClick={() => {}}>
+          <Icon name="edit" size={14} />
+          Editar
+        </Link>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20 }}>
+        {/* Main info */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* Details card */}
+          <div className="card">
+            <div className="card-title">Información General</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              {[
+                ['Cliente', project.client_name || '—'],
+                ['Solicitante', project.requestor || '—'],
+                ['PO (OC)', project.po || '—'],
+                ['Nro. Factura', project.invoice_number || '—'],
+                ['Fecha Facturación', fmtDate(project.billing_date)],
+                ['Fecha posible cobro', fmtDate(project.possible_payment_date)],
+                ['Fecha cobro efectivo', fmtDate(project.actual_payment_date)],
+                ...(project.type === 'Tiempo y materiales' ? [['Horas estimadas', project.hours_estimated ? fmtNum(project.hours_estimated, 0) + ' hs' : '—']] : []),
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 4 }}>{label}</div>
+                  <div style={{ fontWeight: 500 }}>{value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Owners */}
+          <div className="card">
+            <div className="card-title">Owners</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {(project.owners || []).map((o, i) => (
+                <div key={i} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 14px' }}>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{o.owner_type === 'Z2' ? 'Z2 (Empresa)' : o.collaborator_name || '—'}</div>
+                  {o.collaborator_condition && <ConditionBadge condition={o.collaborator_condition} />}
+                </div>
+              ))}
+              {(!project.owners || project.owners.length === 0) && (
+                <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Sin owners asignados</span>
+              )}
+            </div>
+          </div>
+
+          {/* Hours tracking (only if has hour-based collaborators) */}
+          {hourCollabs.length > 0 && (
+            <div className="card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div className="card-title" style={{ marginBottom: 0 }}>Horas Ejecutadas</div>
+                <button className="btn btn-primary btn-sm" onClick={() => setAddingHours(true)}>
+                  <Icon name="plus" size={12} /> Registrar Horas
+                </button>
+              </div>
+
+              {/* Totals per collaborator */}
+              {hours.totals.length > 0 && (
+                <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+                  {hours.totals.map(t => (
+                    <div key={t.collaborator_id} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 16px' }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{t.collaborator_name}</div>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 18, color: 'var(--accent)' }}>{fmtNum(t.total_hours, 1)} hs</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Colaborador</th>
+                      <th>Horas</th>
+                      <th>Fecha</th>
+                      <th>Descripción</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {hours.entries.map(h => (
+                      <tr key={h.id}>
+                        <td style={{ fontWeight: 500 }}>{h.collaborator_name}</td>
+                        <td className="td-mono" style={{ color: 'var(--accent)' }}>{fmtNum(h.hours, 1)} hs</td>
+                        <td style={{ color: 'var(--text-secondary)' }}>{fmtDate(h.date)}</td>
+                        <td style={{ color: 'var(--text-secondary)' }}>{h.description || '—'}</td>
+                        <td>
+                          <div className="row-actions">
+                            <button className="btn btn-ghost btn-icon" style={{ color: 'var(--red)' }} onClick={() => setDeleteHourId(h.id)}>
+                              <Icon name="trash" size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {hours.entries.length === 0 && (
+                      <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>Sin horas registradas</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Quote file */}
+          <div className="card">
+            <div className="card-title">Cotización (PDF)</div>
+            {project.quote_file ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <a href={project.quote_file} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm">
+                  <Icon name="file" size={14} /> Ver Cotización
+                </a>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>PDF adjunto</span>
+              </div>
+            ) : (
+              <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Sin cotización adjunta</div>
+            )}
+            <div style={{ marginTop: 12 }}>
+              <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
+                <Icon name="upload" size={14} /> {uploadingFile ? 'Subiendo...' : 'Subir PDF'}
+                <input type="file" accept=".pdf" style={{ display: 'none' }} onChange={handleFileUpload} disabled={uploadingFile} />
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {/* Right sidebar: amounts */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="card">
+            <div className="card-title">Montos USD</div>
+            {[['Subtotal', project.subtotal_usd], ['IVA', project.iva_usd], ['Total', project.total_usd]].map(([k, v]) => (
+              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: k !== 'Total' ? '1px solid var(--border-subtle)' : 'none' }}>
+                <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{k}</span>
+                <span className="td-mono" style={{ fontWeight: k === 'Total' ? 700 : 400, color: k === 'Total' ? 'var(--green)' : 'var(--text-primary)' }}>
+                  {fmtUSD(v)}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="card">
+            <div className="card-title">Montos UYU</div>
+            {[['Subtotal', project.subtotal_uyu], ['IVA', project.iva_uyu], ['Total', project.total_uyu]].map(([k, v]) => (
+              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: k !== 'Total' ? '1px solid var(--border-subtle)' : 'none' }}>
+                <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{k}</span>
+                <span className="td-mono" style={{ fontWeight: k === 'Total' ? 700 : 400, color: k === 'Total' ? 'var(--green)' : 'var(--text-primary)' }}>
+                  {fmtUYU(v)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Add Hours Modal */}
+      {addingHours && (
+        <div className="modal-overlay">
+          <div className="modal modal-sm">
+            <div className="modal-header">
+              <h3>Registrar Horas</h3>
+              <button className="btn btn-ghost btn-icon" onClick={() => setAddingHours(false)}><Icon name="close" size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <div className="form-grid" style={{ gridTemplateColumns: '1fr' }}>
+                <div className="form-group">
+                  <label>Colaborador *</label>
+                  <select value={hourForm.collaborator_id} onChange={e => setHourForm(f => ({ ...f, collaborator_id: e.target.value }))}>
+                    <option value="">Seleccionar colaborador</option>
+                    {hourCollabs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Horas *</label>
+                  <input type="number" step="0.5" value={hourForm.hours} onChange={e => setHourForm(f => ({ ...f, hours: e.target.value }))} placeholder="0" />
+                </div>
+                <div className="form-group">
+                  <label>Fecha</label>
+                  <input type="date" value={hourForm.date} onChange={e => setHourForm(f => ({ ...f, date: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>Descripción</label>
+                  <textarea value={hourForm.description} onChange={e => setHourForm(f => ({ ...f, description: e.target.value }))} placeholder="Descripción de las tareas..." rows={3} />
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setAddingHours(false)}>Cancelar</button>
+              <button className="btn btn-primary" onClick={handleAddHours} disabled={savingHours}>
+                Registrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteHourId && (
+        <ConfirmDialog message="Se eliminarán estas horas registradas." onConfirm={handleDeleteHours} onCancel={() => setDeleteHourId(null)} />
+      )}
+    </div>
+  );
+}
