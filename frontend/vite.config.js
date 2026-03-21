@@ -5,13 +5,15 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    host: true,
+    allowedHosts: ['administracion.zoonoticuy.com'],
     proxy: {
       '/api': {
-        target: 'http://localhost:4000',
+        target: 'http://localhost:4001',
         changeOrigin: true
       },
       '/uploads': {
-        target: 'http://localhost:4000',
+        target: 'http://localhost:4001',
         changeOrigin: true
       }
     }
