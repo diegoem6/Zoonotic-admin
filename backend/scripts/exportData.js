@@ -62,8 +62,6 @@ async function main() {
   parts.push(`-- Z2 DATA EXPORT - ${date}`);
   parts.push(`-- Importar con: psql -U <user> -d <db> -f export_${date}.sql`);
   parts.push(`-- =============================================\n`);
-  parts.push(`SET session_replication_role = replica; -- deshabilita FK checks temporalmente\n`);
-
   // Limpiar datos existentes en orden inverso a las FK
   parts.push(`-- Eliminar datos existentes`);
   parts.push(`TRUNCATE TABLE taxes, expenses, project_hours, project_owners, projects, client_referentes, collaborators, clients RESTART IDENTITY CASCADE;\n`);
@@ -97,7 +95,6 @@ async function main() {
       parts.push(`SELECT setval('${t}_id_seq', COALESCE((SELECT MAX(id) FROM ${t}), 1));`);
     }
 
-    parts.push(`\nSET session_replication_role = DEFAULT; -- reactiva FK checks`);
     parts.push(`\n-- Export completo.`);
 
     fs.writeFileSync(outFile, parts.join('\n'));
