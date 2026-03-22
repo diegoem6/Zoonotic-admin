@@ -40,8 +40,9 @@ function escape(val) {
   return `'${String(val).replace(/'/g, "''")}'`;
 }
 
-async function exportTable(client, tableName, columns) {
-  const { rows } = await client.query(`SELECT ${columns.join(', ')} FROM ${tableName} ORDER BY id`);
+async function exportTable(client, tableName, columns, where = '') {
+  const whereClause = where ? ` WHERE ${where}` : '';
+  const { rows } = await client.query(`SELECT ${columns.join(', ')} FROM ${tableName}${whereClause} ORDER BY id`);
   if (rows.length === 0) return `-- ${tableName}: sin datos\n`;
 
   const lines = rows.map(row => {
@@ -67,9 +68,10 @@ async function main() {
   parts.push(`TRUNCATE TABLE taxes, expenses, project_hours, project_owners, projects, client_referentes, collaborators, clients RESTART IDENTITY CASCADE;\n`);
 
   try {
-    // Orden respeta foreign keys
+    // Orden respeta foreign keys; WHERE clauses filtran registros huérfanos
     parts.push(await exportTable(client, 'clients', ['id', 'name', 'rut', 'description', 'created_at', 'updated_at']));
-    parts.push(await exportTable(client, 'client_referentes', ['id', 'client_id', 'name', 'email', 'phone']));
+    parts.push(await exportTable(client, 'client_referentes', ['id', 'client_id', 'name', 'email', 'phone'],
+      'client_id IN (SELECT id FROM clients)'));
     parts.push(await exportTable(client, 'collaborators', ['id', 'name', 'start_date', 'email', 'condition', 'active', 'created_at', 'updated_at']));
     parts.push(await exportTable(client, 'projects', [
       'id', 'name', 'status', 'client_id', 'requestor', 'po', 'quote_file', 'type',
@@ -77,8 +79,10 @@ async function main() {
       'currency', 'subtotal_usd', 'iva_usd', 'total_usd', 'subtotal_uyu', 'iva_uyu', 'total_uyu',
       'possible_payment_date', 'actual_payment_date', 'created_at', 'updated_at'
     ]));
-    parts.push(await exportTable(client, 'project_owners', ['id', 'project_id', 'owner_type', 'collaborator_id']));
-    parts.push(await exportTable(client, 'project_hours', ['id', 'project_id', 'collaborator_id', 'hours', 'date', 'description', 'created_at']));
+    parts.push(await exportTable(client, 'project_owners', ['id', 'project_id', 'owner_type', 'collaborator_id'],
+      'project_id IN (SELECT id FROM projects)'));
+    parts.push(await exportTable(client, 'project_hours', ['id', 'project_id', 'collaborator_id', 'hours', 'date', 'description', 'created_at'],
+      'project_id IN (SELECT id FROM projects)'));
     parts.push(await exportTable(client, 'expenses', [
       'id', 'date', 'description', 'amount', 'currency', 'collaborator_id',
       'comment', 'auto_generated', 'project_id', 'type', 'created_at', 'updated_at'
