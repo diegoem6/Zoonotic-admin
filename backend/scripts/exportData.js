@@ -36,6 +36,7 @@ function escape(val) {
   if (val === null || val === undefined) return 'NULL';
   if (typeof val === 'boolean') return val ? 'TRUE' : 'FALSE';
   if (typeof val === 'number') return val;
+  if (val instanceof Date) return `'${val.toISOString()}'`;
   return `'${String(val).replace(/'/g, "''")}'`;
 }
 
