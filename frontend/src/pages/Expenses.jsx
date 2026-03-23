@@ -1,9 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getExpenses, createExpense, updateExpense, deleteExpense, getCollaborators } from '../utils/api';
-import { fmtUSD, fmtUYU, fmtDate, CURRENCIES, EXPENSE_TYPES, MONTHS, currentYear, currentMonth, YEARS_RANGE } from '../utils/helpers';
+import { getExpenses, createExpense, updateExpense, updateExpenseStatus, deleteExpense, getCollaborators } from '../utils/api';
+import { fmtUSD, fmtUYU, fmtDate, CURRENCIES, EXPENSE_TYPES } from '../utils/helpers';
 import { Icon, CurrencyBadge, ConfirmDialog, Spinner, EmptyState, toast } from '../components/UI';
 
-const EMPTY = { date: '', description: '', amount: '', currency: 'USD', collaborator_id: '', comment: '', type: 'Egreso' };
+const EMPTY = { date: '', description: '', amount: '', currency: 'USD', collaborator_id: '', comment: '', type: 'Egreso', payment_status: 'pendiente' };
+
+const PaymentStatusBadge = ({ status }) => (
+  <span className={`badge ${status === 'pagado' ? 'badge-cobrado' : 'badge-cotizar'}`}>
+    {status === 'pagado' ? 'Pagado' : 'Pendiente'}
+  </span>
+);
 
 export default function Expenses() {
   const [expenses, setExpenses] = useState([]);
@@ -16,6 +22,7 @@ export default function Expenses() {
   const [filterCollab, setFilterCollab] = useState('');
   const [filterCurrency, setFilterCurrency] = useState('');
   const [filterType, setFilterType] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,6 +56,15 @@ export default function Expenses() {
     setSaving(false);
   };
 
+  const handleToggleStatus = async (expense) => {
+    const next = expense.payment_status === 'pagado' ? 'pendiente' : 'pagado';
+    try {
+      await updateExpenseStatus(expense.id, next);
+      toast(next === 'pagado' ? 'Marcado como pagado' : 'Marcado como pendiente');
+      load();
+    } catch (e) { toast(e.message, 'error'); }
+  };
+
   const handleDelete = async () => {
     try { await deleteExpense(deleteId); toast('Egreso eliminado'); setDeleteId(null); load(); }
     catch (e) { toast(e.message, 'error'); }
@@ -58,14 +74,17 @@ export default function Expenses() {
     const matchCollab = !filterCollab || String(e.collaborator_id) === filterCollab;
     const matchCurr = !filterCurrency || e.currency === filterCurrency;
     const matchType = !filterType || e.type === filterType;
-    return matchCollab && matchCurr && matchType;
+    const matchStatus = !filterStatus || e.payment_status === filterStatus;
+    return matchCollab && matchCurr && matchType && matchStatus;
   });
 
-  // Totals
-  const totalEgresoUSD = filtered.filter(e => e.currency === 'USD' && e.type === 'Egreso').reduce((a, e) => a + parseFloat(e.amount || 0), 0);
-  const totalEgresoUYU = filtered.filter(e => e.currency === 'UYU' && e.type === 'Egreso').reduce((a, e) => a + parseFloat(e.amount || 0), 0);
-  const totalDevUSD = filtered.filter(e => e.currency === 'USD' && e.type === 'Devolución').reduce((a, e) => a + parseFloat(e.amount || 0), 0);
-  const totalDevUYU = filtered.filter(e => e.currency === 'UYU' && e.type === 'Devolución').reduce((a, e) => a + parseFloat(e.amount || 0), 0);
+  // Totals: only pagado expenses count as effective
+  const pagados = filtered.filter(e => e.payment_status === 'pagado');
+  const pendientes = filtered.filter(e => e.payment_status === 'pendiente');
+  const totalEgresoUSD = pagados.filter(e => e.currency === 'USD' && e.type === 'Egreso').reduce((a, e) => a + parseFloat(e.amount || 0), 0);
+  const totalEgresoUYU = pagados.filter(e => e.currency === 'UYU' && e.type === 'Egreso').reduce((a, e) => a + parseFloat(e.amount || 0), 0);
+  const totalPendUSD = pendientes.filter(e => e.currency === 'USD' && e.type === 'Egreso').reduce((a, e) => a + parseFloat(e.amount || 0), 0);
+  const totalPendUYU = pendientes.filter(e => e.currency === 'UYU' && e.type === 'Egreso').reduce((a, e) => a + parseFloat(e.amount || 0), 0);
 
   return (
     <div>
@@ -82,20 +101,20 @@ export default function Expenses() {
       {/* Summary */}
       <div className="stat-grid" style={{ marginBottom: 24 }}>
         <div className="stat-card">
-          <div className="stat-label">Total Egresos USD</div>
+          <div className="stat-label">Egresos Pagados USD</div>
           <div className="stat-value" style={{ fontSize: 18, color: 'var(--red)' }}>{fmtUSD(totalEgresoUSD)}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">Total Egresos UYU</div>
+          <div className="stat-label">Egresos Pagados UYU</div>
           <div className="stat-value" style={{ fontSize: 18, color: 'var(--red)' }}>{fmtUYU(totalEgresoUYU)}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">Total Devoluciones USD</div>
-          <div className="stat-value" style={{ fontSize: 18, color: 'var(--green)' }}>{fmtUSD(totalDevUSD)}</div>
+          <div className="stat-label">Pendiente USD</div>
+          <div className="stat-value" style={{ fontSize: 18, color: 'var(--text-secondary)' }}>{fmtUSD(totalPendUSD)}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">Total Devoluciones UYU</div>
-          <div className="stat-value" style={{ fontSize: 18, color: 'var(--green)' }}>{fmtUYU(totalDevUYU)}</div>
+          <div className="stat-label">Pendiente UYU</div>
+          <div className="stat-value" style={{ fontSize: 18, color: 'var(--text-secondary)' }}>{fmtUYU(totalPendUYU)}</div>
         </div>
       </div>
 
@@ -112,8 +131,13 @@ export default function Expenses() {
           <option value="">Todos los tipos</option>
           {EXPENSE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
-        {(filterCollab || filterCurrency || filterType) && (
-          <button className="btn btn-ghost btn-sm" onClick={() => { setFilterCollab(''); setFilterCurrency(''); setFilterType(''); }}>
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ width: 140 }}>
+          <option value="">Todos los estados</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="pagado">Pagado</option>
+        </select>
+        {(filterCollab || filterCurrency || filterType || filterStatus) && (
+          <button className="btn btn-ghost btn-sm" onClick={() => { setFilterCollab(''); setFilterCurrency(''); setFilterType(''); setFilterStatus(''); }}>
             Limpiar
           </button>
         )}
@@ -134,7 +158,7 @@ export default function Expenses() {
                 <th>Monto</th>
                 <th>Moneda</th>
                 <th>Colaborador</th>
-                <th>Comentario</th>
+                <th>Estado</th>
                 <th>Origen</th>
                 <th></th>
               </tr>
@@ -152,7 +176,16 @@ export default function Expenses() {
                   </td>
                   <td><CurrencyBadge currency={e.currency} /></td>
                   <td style={{ color: 'var(--text-secondary)' }}>{e.collaborator_name || '—'}</td>
-                  <td style={{ color: 'var(--text-muted)', fontSize: 12, maxWidth: 160 }}>{e.comment || '—'}</td>
+                  <td>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{ padding: '2px 6px' }}
+                      onClick={() => handleToggleStatus(e)}
+                      title={e.payment_status === 'pagado' ? 'Marcar como pendiente' : 'Marcar como pagado'}
+                    >
+                      <PaymentStatusBadge status={e.payment_status} />
+                    </button>
+                  </td>
                   <td>
                     {e.auto_generated ? (
                       <span className="badge badge-ingeuy">Auto</span>
@@ -207,6 +240,13 @@ export default function Expenses() {
                   <label>Moneda</label>
                   <select value={form.currency} onChange={e => set('currency', e.target.value)}>
                     {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Estado</label>
+                  <select value={form.payment_status} onChange={e => set('payment_status', e.target.value)}>
+                    <option value="pendiente">Pendiente</option>
+                    <option value="pagado">Pagado</option>
                   </select>
                 </div>
                 <div className="form-group full-width">

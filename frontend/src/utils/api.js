@@ -58,12 +58,16 @@ export const uploadQuote     = (id, file) => {
 export const getProjectHours    = (id)         => api.get(`/projects/${id}/hours`);
 export const addProjectHours    = (id, data)   => api.post(`/projects/${id}/hours`, data);
 export const deleteProjectHours = (id, hourId) => api.delete(`/projects/${id}/hours/${hourId}`);
+export const getProjectViaticos    = (id)            => api.get(`/projects/${id}/viaticos`);
+export const addProjectViatico     = (id, data)      => api.post(`/projects/${id}/viaticos`, data);
+export const deleteProjectViatico  = (id, viaticId)  => api.delete(`/projects/${id}/viaticos/${viaticId}`);
 
 // EXPENSES
-export const getExpenses      = (params) => api.get('/expenses', { params });
-export const createExpense    = (data)   => api.post('/expenses', data);
-export const updateExpense    = (id, d)  => api.put(`/expenses/${id}`, d);
-export const deleteExpense    = (id)     => api.delete(`/expenses/${id}`);
+export const getExpenses           = (params)          => api.get('/expenses', { params });
+export const createExpense         = (data)            => api.post('/expenses', data);
+export const updateExpense         = (id, d)           => api.put(`/expenses/${id}`, d);
+export const updateExpenseStatus   = (id, status)      => api.patch(`/expenses/${id}/status`, { payment_status: status });
+export const deleteExpense         = (id)              => api.delete(`/expenses/${id}`);
 
 // TAXES
 export const getTaxes   = (params) => api.get('/taxes', { params });
@@ -75,6 +79,7 @@ export const getIvaCalc = (params) => api.get('/taxes/iva-calc', { params });
 // BILLING
 export const getBillingSummary = (params) => api.get('/billing/summary', { params });
 export const getBillingCombined = (params) => api.get('/billing/summary/combined', { params });
+export const getBillingByStatus = (params) => api.get('/billing/summary/by-status', { params });
 
 // CASHFLOW
 export const getCashflow = (params) => api.get('/cashflow', { params });

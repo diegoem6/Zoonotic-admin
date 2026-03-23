@@ -64,7 +64,7 @@ export default function Dashboard() {
           <h2>Dashboard</h2>
           <p>Resumen general — {MONTHS[currentMonth - 1]} {currentYear}</p>
         </div>
-        <Link to="/projects" className="btn btn-primary">
+        <Link to="/projects" state={{ openCreate: true }} className="btn btn-primary">
           <Icon name="plus" size={14} /> Nuevo Proyecto
         </Link>
       </div>

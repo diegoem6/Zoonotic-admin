@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   getProject, getProjectHours, addProjectHours, deleteProjectHours,
+  getProjectViaticos, addProjectViatico, deleteProjectViatico,
   uploadQuote, getCollaborators
 } from '../utils/api';
 import { fmtUSD, fmtUYU, fmtDate, fmtNum } from '../utils/helpers';
@@ -12,20 +13,26 @@ export default function ProjectDetail() {
   const navigate = useNavigate();
   const [project, setProject] = useState(null);
   const [hours, setHours] = useState({ entries: [], totals: [] });
+  const [viaticos, setViaticos] = useState({ entries: [], totals: [] });
   const [collaborators, setCollaborators] = useState([]);
   const [loading, setLoading] = useState(true);
   const [addingHours, setAddingHours] = useState(false);
-  const [hourForm, setHourForm] = useState({ collaborator_id: '', hours: '', date: '', description: '' });
+  const [hourForm, setHourForm] = useState({ collaborator_id: '', hours: '', date: '', description: '', hourly_rate: '', currency: 'USD' });
   const [savingHours, setSavingHours] = useState(false);
   const [deleteHourId, setDeleteHourId] = useState(null);
+  const [addingViatico, setAddingViatico] = useState(false);
+  const [viaticForm, setViaticForm] = useState({ collaborator_id: '', dias: '', date: '', description: '', daily_rate: '', currency: 'USD' });
+  const [savingViatico, setSavingViatico] = useState(false);
+  const [deleteViaticId, setDeleteViaticId] = useState(null);
   const [uploadingFile, setUploadingFile] = useState(false);
 
   const load = async () => {
     setLoading(true);
     try {
-      const [p, h, c] = await Promise.all([getProject(id), getProjectHours(id), getCollaborators()]);
+      const [p, h, v, c] = await Promise.all([getProject(id), getProjectHours(id), getProjectViaticos(id), getCollaborators()]);
       setProject(p);
       setHours(h);
+      setViaticos(v);
       setCollaborators(c);
     } catch (e) { toast(e.message, 'error'); navigate('/projects'); }
     setLoading(false);
@@ -47,7 +54,7 @@ export default function ProjectDetail() {
     try {
       await addProjectHours(id, hourForm);
       toast('Horas registradas');
-      setHourForm({ collaborator_id: '', hours: '', date: '', description: '' });
+      setHourForm({ collaborator_id: '', hours: '', date: '', description: '', hourly_rate: '', currency: 'USD' });
       setAddingHours(false);
       load();
     } catch (e) { toast(e.message, 'error'); }
@@ -56,6 +63,24 @@ export default function ProjectDetail() {
 
   const handleDeleteHours = async () => {
     try { await deleteProjectHours(id, deleteHourId); toast('Horas eliminadas'); setDeleteHourId(null); load(); }
+    catch (e) { toast(e.message, 'error'); }
+  };
+
+  const handleAddViatico = async () => {
+    if (!viaticForm.collaborator_id || !viaticForm.dias) return toast('Colaborador y días son obligatorios', 'error');
+    setSavingViatico(true);
+    try {
+      await addProjectViatico(id, viaticForm);
+      toast('Viático registrado');
+      setViaticForm({ collaborator_id: '', dias: '', date: '', description: '', daily_rate: '', currency: 'USD' });
+      setAddingViatico(false);
+      load();
+    } catch (e) { toast(e.message, 'error'); }
+    setSavingViatico(false);
+  };
+
+  const handleDeleteViatico = async () => {
+    try { await deleteProjectViatico(id, deleteViaticId); toast('Viático eliminado'); setDeleteViaticId(null); load(); }
     catch (e) { toast(e.message, 'error'); }
   };
 
@@ -86,10 +111,10 @@ export default function ProjectDetail() {
             </div>
           </div>
         </div>
-        <Link to="/projects" className="btn btn-secondary" onClick={() => {}}>
+        <button className="btn btn-secondary" onClick={() => navigate('/projects', { state: { editId: Number(id) } })}>
           <Icon name="edit" size={14} />
           Editar
-        </Link>
+        </button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20 }}>
@@ -150,6 +175,12 @@ export default function ProjectDetail() {
                     <div key={t.collaborator_id} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 16px' }}>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{t.collaborator_name}</div>
                       <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 18, color: 'var(--accent)' }}>{fmtNum(t.total_hours, 1)} hs</div>
+                      {parseFloat(t.total_cost_usd) > 0 && (
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{fmtUSD(t.total_cost_usd)}</div>
+                      )}
+                      {parseFloat(t.total_cost_uyu) > 0 && (
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{fmtUYU(t.total_cost_uyu)}</div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -161,29 +192,114 @@ export default function ProjectDetail() {
                     <tr>
                       <th>Colaborador</th>
                       <th>Horas</th>
+                      <th>Valor/h</th>
+                      <th>Total</th>
                       <th>Fecha</th>
                       <th>Descripción</th>
                       <th></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {hours.entries.map(h => (
-                      <tr key={h.id}>
-                        <td style={{ fontWeight: 500 }}>{h.collaborator_name}</td>
-                        <td className="td-mono" style={{ color: 'var(--accent)' }}>{fmtNum(h.hours, 1)} hs</td>
-                        <td style={{ color: 'var(--text-secondary)' }}>{fmtDate(h.date)}</td>
-                        <td style={{ color: 'var(--text-secondary)' }}>{h.description || '—'}</td>
-                        <td>
-                          <div className="row-actions">
-                            <button className="btn btn-ghost btn-icon" style={{ color: 'var(--red)' }} onClick={() => setDeleteHourId(h.id)}>
-                              <Icon name="trash" size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    {hours.entries.map(h => {
+                      const total = h.hourly_rate ? parseFloat(h.hours) * parseFloat(h.hourly_rate) : null;
+                      return (
+                        <tr key={h.id}>
+                          <td style={{ fontWeight: 500 }}>{h.collaborator_name}</td>
+                          <td className="td-mono" style={{ color: 'var(--accent)' }}>{fmtNum(h.hours, 1)} hs</td>
+                          <td className="td-mono" style={{ color: 'var(--text-secondary)' }}>
+                            {h.hourly_rate ? `${fmtNum(h.hourly_rate, 2)} ${h.currency}` : '—'}
+                          </td>
+                          <td className="td-mono" style={{ fontWeight: 600 }}>
+                            {total !== null ? (h.currency === 'UYU' ? fmtUYU(total) : fmtUSD(total)) : '—'}
+                          </td>
+                          <td style={{ color: 'var(--text-secondary)' }}>{fmtDate(h.date)}</td>
+                          <td style={{ color: 'var(--text-secondary)' }}>{h.description || '—'}</td>
+                          <td>
+                            <div className="row-actions">
+                              <button className="btn btn-ghost btn-icon" style={{ color: 'var(--red)' }} onClick={() => setDeleteHourId(h.id)}>
+                                <Icon name="trash" size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {hours.entries.length === 0 && (
-                      <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>Sin horas registradas</td></tr>
+                      <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>Sin horas registradas</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Viaticos (only if has hour-based collaborators) */}
+          {hourCollabs.length > 0 && (
+            <div className="card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div className="card-title" style={{ marginBottom: 0 }}>Viáticos</div>
+                <button className="btn btn-primary btn-sm" onClick={() => setAddingViatico(true)}>
+                  <Icon name="plus" size={12} /> Registrar Viático
+                </button>
+              </div>
+
+              {viaticos.totals.length > 0 && (
+                <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+                  {viaticos.totals.map(t => (
+                    <div key={t.collaborator_id} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 16px' }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{t.collaborator_name}</div>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 18, color: 'var(--accent)' }}>{fmtNum(t.total_dias, 1)} días</div>
+                      {parseFloat(t.total_cost_usd) > 0 && (
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{fmtUSD(t.total_cost_usd)}</div>
+                      )}
+                      {parseFloat(t.total_cost_uyu) > 0 && (
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{fmtUYU(t.total_cost_uyu)}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Colaborador</th>
+                      <th>Días</th>
+                      <th>Valor/día</th>
+                      <th>Total</th>
+                      <th>Fecha</th>
+                      <th>Descripción</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {viaticos.entries.map(v => {
+                      const total = v.daily_rate ? parseFloat(v.dias) * parseFloat(v.daily_rate) : null;
+                      return (
+                        <tr key={v.id}>
+                          <td style={{ fontWeight: 500 }}>{v.collaborator_name}</td>
+                          <td className="td-mono" style={{ color: 'var(--accent)' }}>{fmtNum(v.dias, 1)} días</td>
+                          <td className="td-mono" style={{ color: 'var(--text-secondary)' }}>
+                            {v.daily_rate ? `${fmtNum(v.daily_rate, 2)} ${v.currency}` : '—'}
+                          </td>
+                          <td className="td-mono" style={{ fontWeight: 600 }}>
+                            {total !== null ? (v.currency === 'UYU' ? fmtUYU(total) : fmtUSD(total)) : '—'}
+                          </td>
+                          <td style={{ color: 'var(--text-secondary)' }}>{fmtDate(v.date)}</td>
+                          <td style={{ color: 'var(--text-secondary)' }}>{v.description || '—'}</td>
+                          <td>
+                            <div className="row-actions">
+                              <button className="btn btn-ghost btn-icon" style={{ color: 'var(--red)' }} onClick={() => setDeleteViaticId(v.id)}>
+                                <Icon name="trash" size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {viaticos.entries.length === 0 && (
+                      <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>Sin viáticos registrados</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -260,7 +376,18 @@ export default function ProjectDetail() {
                 </div>
                 <div className="form-group">
                   <label>Horas *</label>
-                  <input type="number" step="0.5" value={hourForm.hours} onChange={e => setHourForm(f => ({ ...f, hours: e.target.value }))} placeholder="0" />
+                  <input type="number" step="0.5" min="0" value={hourForm.hours} onChange={e => setHourForm(f => ({ ...f, hours: e.target.value }))} placeholder="0" />
+                </div>
+                <div className="form-group">
+                  <label>Valor hora</label>
+                  <input type="number" step="0.01" min="0" value={hourForm.hourly_rate} onChange={e => setHourForm(f => ({ ...f, hourly_rate: e.target.value }))} placeholder="0.00" />
+                </div>
+                <div className="form-group">
+                  <label>Moneda</label>
+                  <select value={hourForm.currency} onChange={e => setHourForm(f => ({ ...f, currency: e.target.value }))}>
+                    <option value="USD">USD</option>
+                    <option value="UYU">UYU</option>
+                  </select>
                 </div>
                 <div className="form-group">
                   <label>Fecha</label>
@@ -284,6 +411,62 @@ export default function ProjectDetail() {
 
       {deleteHourId && (
         <ConfirmDialog message="Se eliminarán estas horas registradas." onConfirm={handleDeleteHours} onCancel={() => setDeleteHourId(null)} />
+      )}
+
+      {/* Add Viatico Modal */}
+      {addingViatico && (
+        <div className="modal-overlay">
+          <div className="modal modal-sm">
+            <div className="modal-header">
+              <h3>Registrar Viático</h3>
+              <button className="btn btn-ghost btn-icon" onClick={() => setAddingViatico(false)}><Icon name="close" size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <div className="form-grid" style={{ gridTemplateColumns: '1fr' }}>
+                <div className="form-group">
+                  <label>Colaborador *</label>
+                  <select value={viaticForm.collaborator_id} onChange={e => setViaticForm(f => ({ ...f, collaborator_id: e.target.value }))}>
+                    <option value="">Seleccionar colaborador</option>
+                    {hourCollabs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Cantidad de días *</label>
+                  <input type="number" step="0.5" min="0" value={viaticForm.dias} onChange={e => setViaticForm(f => ({ ...f, dias: e.target.value }))} placeholder="0" />
+                </div>
+                <div className="form-group">
+                  <label>Valor por día</label>
+                  <input type="number" step="0.01" min="0" value={viaticForm.daily_rate} onChange={e => setViaticForm(f => ({ ...f, daily_rate: e.target.value }))} placeholder="0.00" />
+                </div>
+                <div className="form-group">
+                  <label>Moneda</label>
+                  <select value={viaticForm.currency} onChange={e => setViaticForm(f => ({ ...f, currency: e.target.value }))}>
+                    <option value="USD">USD</option>
+                    <option value="UYU">UYU</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Fecha</label>
+                  <input type="date" value={viaticForm.date} onChange={e => setViaticForm(f => ({ ...f, date: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>Descripción</label>
+                  <textarea value={viaticForm.description} onChange={e => setViaticForm(f => ({ ...f, description: e.target.value }))} placeholder="Descripción del viático..." rows={3} />
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setAddingViatico(false)}>Cancelar</button>
+              <button className="btn btn-primary" onClick={handleAddViatico} disabled={savingViatico}>
+                Registrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteViaticId && (
+        <ConfirmDialog message="Se eliminará este viático registrado." onConfirm={handleDeleteViatico} onCancel={() => setDeleteViaticId(null)} />
       )}
     </div>
   );

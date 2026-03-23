@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getBillingSummary, getBillingCombined } from '../utils/api';
+import { getBillingSummary, getBillingCombined, getBillingByStatus } from '../utils/api';
 import { fmtUSD, fmtUYU, fmtNum, MONTHS, currentYear, YEARS_RANGE } from '../utils/helpers';
 import { Icon, LoadingPage, RazonBadge } from '../components/UI';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
@@ -9,19 +9,23 @@ const MONTH_NAMES = MONTHS.map(m => m.slice(0, 3));
 export default function Billing() {
   const [summary, setSummary] = useState([]);
   const [combined, setCombined] = useState([]);
+  const [byStatus, setByStatus] = useState([]);
   const [year, setYear] = useState(currentYear);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('combined');
   const [filterRazon, setFilterRazon] = useState('');
+  const [chartCurrency, setChartCurrency] = useState('USD');
 
   useEffect(() => {
     setLoading(true);
     Promise.all([
       getBillingSummary({ year }),
-      getBillingCombined({ year })
-    ]).then(([s, c]) => {
+      getBillingCombined({ year }),
+      getBillingByStatus({ year }),
+    ]).then(([s, c, bs]) => {
       setSummary(s);
       setCombined(c);
+      setByStatus(bs);
     }).finally(() => setLoading(false));
   }, [year]);
 
@@ -32,14 +36,16 @@ export default function Billing() {
     : summary.filter(r => !filterRazon || r.razon_social === filterRazon);
 
   // Build chart data for all 12 months
+  const subtotalKey = chartCurrency === 'USD' ? 'subtotal_usd' : 'subtotal_uyu';
+  const find = (m, razon, status) => byStatus.find(r => r.month === m && r.razon_social === razon && r.status === status);
   const chartData = MONTHS.map((name, i) => {
     const m = i + 1;
-    const zoo = summary.find(r => r.month === m && r.razon_social === 'Zoonotic');
-    const ing = summary.find(r => r.month === m && r.razon_social === 'Ingeuy');
     return {
       name: name.slice(0, 3),
-      Zoonotic: parseFloat(zoo?.subtotal_usd || 0),
-      Ingeuy: parseFloat(ing?.subtotal_usd || 0),
+      'Zoonotic Facturado': parseFloat(find(m, 'Zoonotic', 'Facturado')?.[subtotalKey] || 0),
+      'Zoonotic Cobrado':   parseFloat(find(m, 'Zoonotic', 'Cobrado')?.[subtotalKey]   || 0),
+      'Ingeuy Facturado':   parseFloat(find(m, 'Ingeuy',   'Facturado')?.[subtotalKey] || 0),
+      'Ingeuy Cobrado':     parseFloat(find(m, 'Ingeuy',   'Cobrado')?.[subtotalKey]   || 0),
     };
   });
 
@@ -87,20 +93,30 @@ export default function Billing() {
 
       {/* Chart */}
       <div className="card mb-6" style={{ marginBottom: 24 }}>
-        <div className="card-title">Facturación mensual {year} (USD subtotal)</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div className="card-title" style={{ margin: 0 }}>Facturación mensual {year} (subtotal)</div>
+          <div className="tabs">
+            <button className={`tab ${chartCurrency === 'USD' ? 'active' : ''}`} onClick={() => setChartCurrency('USD')}>USD</button>
+            <button className={`tab ${chartCurrency === 'UYU' ? 'active' : ''}`} onClick={() => setChartCurrency('UYU')}>UYU</button>
+          </div>
+        </div>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={chartData} barGap={4}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="name" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `$${v >= 1000 ? (v/1000).toFixed(0)+'k' : v}`} />
-            <Tooltip contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }} formatter={(v, name) => [fmtUSD(v), name]} />
-            <Bar dataKey="Zoonotic" fill="var(--teal)" radius={[4,4,0,0]} />
-            <Bar dataKey="Ingeuy" fill="var(--purple)" radius={[4,4,0,0]} />
+            <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `${chartCurrency === 'USD' ? '$' : '$U'}${v >= 1000 ? (v/1000).toFixed(0)+'k' : v}`} />
+            <Tooltip contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }} formatter={(v, name) => [chartCurrency === 'USD' ? fmtUSD(v) : fmtUYU(v), name]} />
+            <Bar dataKey="Zoonotic Facturado" stackId="zoo" fill="#5eead4" />
+            <Bar dataKey="Zoonotic Cobrado"   stackId="zoo" fill="#0d9488" radius={[4,4,0,0]} />
+            <Bar dataKey="Ingeuy Facturado"   stackId="ing" fill="#c4b5fd" />
+            <Bar dataKey="Ingeuy Cobrado"     stackId="ing" fill="#7c3aed" radius={[4,4,0,0]} />
           </BarChart>
         </ResponsiveContainer>
         <div style={{ display: 'flex', gap: 20, marginTop: 8, fontSize: 12 }}>
-          <span style={{ color: 'var(--teal)' }}>■ Zoonotic</span>
-          <span style={{ color: 'var(--purple)' }}>■ Ingeuy</span>
+          <span style={{ color: '#5eead4' }}>■ Zoonotic Facturado</span>
+          <span style={{ color: '#0d9488' }}>■ Zoonotic Cobrado</span>
+          <span style={{ color: '#c4b5fd' }}>■ Ingeuy Facturado</span>
+          <span style={{ color: '#7c3aed' }}>■ Ingeuy Cobrado</span>
         </div>
       </div>
 

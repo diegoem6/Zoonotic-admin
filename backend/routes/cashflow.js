@@ -37,7 +37,7 @@ router.get('/', async (req, res) => {
         COALESCE(SUM(CASE WHEN currency='USD' AND type='Devolución' THEN amount ELSE 0 END), 0) AS devolucion_usd,
         COALESCE(SUM(CASE WHEN currency='UYU' AND type='Devolución' THEN amount ELSE 0 END), 0) AS devolucion_uyu
       FROM expenses
-      WHERE 1=1 ${yc}
+      WHERE payment_status = 'pagado' ${yc}
       GROUP BY year, month
       ORDER BY year DESC, month DESC
     `;

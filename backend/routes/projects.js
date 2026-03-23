@@ -90,7 +90,7 @@ router.post('/', async (req, res) => {
       iva_rate,
       billing_date, razon_social, invoice_number, currency,
       subtotal_usd, iva_usd, total_usd, subtotal_uyu, iva_uyu, total_uyu,
-      possible_payment_date, actual_payment_date, owners = []
+      possible_payment_date, actual_payment_date, comments, owners = []
     } = req.body;
 
     await conn.query('BEGIN');
@@ -99,15 +99,15 @@ router.post('/', async (req, res) => {
       INSERT INTO projects (name, status, client_id, requestor, po, type, hours_estimated,
         iva_rate, billing_date, razon_social, invoice_number, currency,
         subtotal_usd, iva_usd, total_usd, subtotal_uyu, iva_uyu, total_uyu,
-        possible_payment_date, actual_payment_date)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+        possible_payment_date, actual_payment_date, comments)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
       RETURNING *
     `, [name, status || 'Falta Cotizar', client_id || null, requestor, po, type, hours_estimated || null,
         iva_rate !== undefined ? iva_rate : 0.22,
         billing_date || null, razon_social, invoice_number,
         currency, subtotal_usd || 0, iva_usd || 0, total_usd || 0,
         subtotal_uyu || 0, iva_uyu || 0, total_uyu || 0,
-        possible_payment_date || null, actual_payment_date || null]);
+        possible_payment_date || null, actual_payment_date || null, comments || null]);
 
     const project = result.rows[0];
 
@@ -119,9 +119,9 @@ router.post('/', async (req, res) => {
       );
     }
 
-    // Auto-generate expense if Ingeuy and has billing_date
-    if (razon_social === 'Ingeuy' && billing_date && (subtotal_usd > 0 || subtotal_uyu > 0)) {
-      await autoGenerateIngeuyExpense(conn, project);
+    // Auto-generate collaborator expenses if created directly as Cobrado
+    if (status === 'Cobrado') {
+      await autoGenerateExpensesOnCobrado(conn, project);
     }
 
     await conn.query('COMMIT');
@@ -144,7 +144,7 @@ router.put('/:id', async (req, res) => {
       iva_rate,
       billing_date, razon_social, invoice_number, currency,
       subtotal_usd, iva_usd, total_usd, subtotal_uyu, iva_uyu, total_uyu,
-      possible_payment_date, actual_payment_date, owners = []
+      possible_payment_date, actual_payment_date, comments, owners = []
     } = req.body;
 
     await conn.query('BEGIN');
@@ -158,14 +158,14 @@ router.put('/:id', async (req, res) => {
       UPDATE projects SET name=$1, status=$2, client_id=$3, requestor=$4, po=$5, type=$6,
         hours_estimated=$7, iva_rate=$8, billing_date=$9, razon_social=$10, invoice_number=$11, currency=$12,
         subtotal_usd=$13, iva_usd=$14, total_usd=$15, subtotal_uyu=$16, iva_uyu=$17, total_uyu=$18,
-        possible_payment_date=$19, actual_payment_date=$20, updated_at=NOW()
-      WHERE id=$21 RETURNING *
+        possible_payment_date=$19, actual_payment_date=$20, comments=$21, updated_at=NOW()
+      WHERE id=$22 RETURNING *
     `, [name, status, client_id || null, requestor, po, type, hours_estimated || null,
         iva_rate !== undefined ? iva_rate : 0.22,
         billing_date || null, razon_social, invoice_number, currency,
         subtotal_usd || 0, iva_usd || 0, total_usd || 0,
         subtotal_uyu || 0, iva_uyu || 0, total_uyu || 0,
-        possible_payment_date || null, actual_payment_date || null, id]);
+        possible_payment_date || null, actual_payment_date || null, comments || null, id]);
 
     const project = result.rows[0];
 
@@ -178,15 +178,9 @@ router.put('/:id', async (req, res) => {
       );
     }
 
-    // Handle auto-expense for Ingeuy: if billing_date was added/changed and razon is Ingeuy
-    const billingChanged = billing_date && (prevProject.billing_date?.toISOString().split('T')[0] !== billing_date || prevProject.razon_social !== 'Ingeuy');
-    if (razon_social === 'Ingeuy' && billing_date && billingChanged) {
-      // Delete old auto-generated expense for this project
-      await conn.query('DELETE FROM expenses WHERE project_id=$1 AND auto_generated=TRUE', [id]);
-      await autoGenerateIngeuyExpense(conn, project);
-    } else if (razon_social !== 'Ingeuy') {
-      // If changed away from Ingeuy, remove auto expense
-      await conn.query('DELETE FROM expenses WHERE project_id=$1 AND auto_generated=TRUE', [id]);
+    // Auto-generate collaborator expenses when transitioning to Cobrado
+    if (status === 'Cobrado' && prevProject.status !== 'Cobrado') {
+      await autoGenerateExpensesOnCobrado(conn, project);
     }
 
     await conn.query('COMMIT');
@@ -236,11 +230,16 @@ router.get('/:id/hours', async (req, res) => {
       ORDER BY ph.date DESC, ph.created_at DESC
     `, [id]);
     const totalResult = await db.query(`
-      SELECT collaborator_id, col.name as collaborator_name, SUM(hours) as total_hours
+      SELECT
+        ph.collaborator_id,
+        col.name as collaborator_name,
+        SUM(ph.hours) as total_hours,
+        SUM(CASE WHEN ph.hourly_rate IS NOT NULL THEN ph.hours * ph.hourly_rate ELSE 0 END) as total_cost_usd,
+        SUM(CASE WHEN ph.hourly_rate IS NOT NULL AND ph.currency = 'UYU' THEN ph.hours * ph.hourly_rate ELSE 0 END) as total_cost_uyu
       FROM project_hours ph
       JOIN collaborators col ON col.id = ph.collaborator_id
-      WHERE project_id = $1
-      GROUP BY collaborator_id, col.name
+      WHERE ph.project_id = $1
+      GROUP BY ph.collaborator_id, col.name
     `, [id]);
     res.json({ entries: result.rows, totals: totalResult.rows });
   } catch (err) {
@@ -252,10 +251,10 @@ router.get('/:id/hours', async (req, res) => {
 router.post('/:id/hours', async (req, res) => {
   try {
     const { id } = req.params;
-    const { collaborator_id, hours, date, description } = req.body;
+    const { collaborator_id, hours, date, description, hourly_rate, currency } = req.body;
     const result = await db.query(
-      'INSERT INTO project_hours (project_id, collaborator_id, hours, date, description) VALUES ($1,$2,$3,$4,$5) RETURNING *',
-      [id, collaborator_id, hours, date || null, description]
+      'INSERT INTO project_hours (project_id, collaborator_id, hours, date, description, hourly_rate, currency) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+      [id, collaborator_id, hours, date || null, description, hourly_rate || null, currency || null]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -274,34 +273,158 @@ router.delete('/:id/hours/:hourId', async (req, res) => {
   }
 });
 
-// Helper: auto-generate Ingeuy expense for Diego Ricca (Socio)
-async function autoGenerateIngeuyExpense(conn, project) {
-  // Find Diego Ricca (Socio) collaborator
-  const diegoResult = await conn.query(
-    "SELECT id FROM collaborators WHERE name ILIKE 'Diego Ricca' AND condition='Socio' LIMIT 1"
-  );
-  if (diegoResult.rows.length === 0) {
-    console.warn('Diego Ricca (Socio) not found - skipping auto-expense generation');
-    return;
+// GET project viaticos
+router.get('/:id/viaticos', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await db.query(`
+      SELECT pv.*, col.name as collaborator_name
+      FROM project_viaticos pv
+      JOIN collaborators col ON col.id = pv.collaborator_id
+      WHERE pv.project_id = $1
+      ORDER BY pv.date DESC, pv.created_at DESC
+    `, [id]);
+    const totalResult = await db.query(`
+      SELECT
+        pv.collaborator_id,
+        col.name as collaborator_name,
+        SUM(pv.dias) as total_dias,
+        SUM(CASE WHEN pv.daily_rate IS NOT NULL AND (pv.currency IS NULL OR pv.currency != 'UYU') THEN pv.dias * pv.daily_rate ELSE 0 END) as total_cost_usd,
+        SUM(CASE WHEN pv.daily_rate IS NOT NULL AND pv.currency = 'UYU' THEN pv.dias * pv.daily_rate ELSE 0 END) as total_cost_uyu
+      FROM project_viaticos pv
+      JOIN collaborators col ON col.id = pv.collaborator_id
+      WHERE pv.project_id = $1
+      GROUP BY pv.collaborator_id, col.name
+    `, [id]);
+    res.json({ entries: result.rows, totals: totalResult.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-  const diegoId = diegoResult.rows[0].id;
+});
 
-  // Determine amount and currency based on project
-  const amount = project.currency === 'USD' ? project.subtotal_usd : project.subtotal_uyu;
-  const currency = project.currency || 'USD';
+// POST add viatico to project
+router.post('/:id/viaticos', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { collaborator_id, description, dias, date, daily_rate, currency } = req.body;
+    if (!collaborator_id || !dias) return res.status(400).json({ error: 'Colaborador y días son obligatorios' });
+    const result = await db.query(
+      'INSERT INTO project_viaticos (project_id, collaborator_id, description, dias, date, daily_rate, currency) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+      [id, collaborator_id, description, dias, date || null, daily_rate || null, currency || null]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-  await conn.query(`
-    INSERT INTO expenses (date, description, amount, currency, collaborator_id, comment, auto_generated, project_id, type)
-    VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, 'Egreso')
-  `, [
-    project.billing_date,
-    `Pago proyecto Ingeuy: ${project.name}`,
-    amount,
-    currency,
-    diegoId,
-    'Generado automáticamente por facturación Ingeuy',
-    project.id
-  ]);
+// DELETE viatico entry
+router.delete('/:id/viaticos/:viaticId', async (req, res) => {
+  try {
+    const { id, viaticId } = req.params;
+    await db.query('DELETE FROM project_viaticos WHERE id=$1 AND project_id=$2', [viaticId, id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Helper: auto-generate all collaborator expenses when a project transitions to "Cobrado"
+async function autoGenerateExpensesOnCobrado(conn, project) {
+  const projectId = project.id;
+  const comment = 'Generado automáticamente al cobrar el proyecto';
+
+  // Delete previous auto-generated expenses for this project before regenerating
+  await conn.query('DELETE FROM expenses WHERE project_id=$1 AND auto_generated=TRUE', [projectId]);
+
+  // Get all owners with collaborator condition
+  const ownersResult = await conn.query(`
+    SELECT po.collaborator_id, col.name as col_name, col.condition as col_condition
+    FROM project_owners po
+    JOIN collaborators col ON col.id = po.collaborator_id
+    WHERE po.project_id = $1 AND po.collaborator_id IS NOT NULL
+  `, [projectId]);
+  const owners = ownersResult.rows;
+
+  // 1. Contratado por horas — egresos por horas y viáticos, estado pendiente
+  const hourCollabs = owners.filter(o => o.col_condition === 'Contratado por horas');
+  for (const owner of hourCollabs) {
+    // Horas: agrupado por moneda
+    const hoursResult = await conn.query(`
+      SELECT currency, SUM(hours * hourly_rate) as total
+      FROM project_hours
+      WHERE project_id = $1 AND collaborator_id = $2
+        AND hourly_rate IS NOT NULL AND currency IS NOT NULL
+      GROUP BY currency
+    `, [projectId, owner.collaborator_id]);
+    for (const row of hoursResult.rows) {
+      if (parseFloat(row.total) > 0) {
+        await conn.query(`
+          INSERT INTO expenses (date, description, amount, currency, collaborator_id, comment, type, payment_status, auto_generated, project_id)
+          VALUES (NOW(), $1, $2, $3, $4, $5, 'Egreso', 'pendiente', TRUE, $6)
+        `, [`Horas proyecto: ${project.name}`, row.total, row.currency, owner.collaborator_id, comment, projectId]);
+      }
+    }
+
+    // Viáticos: agrupado por moneda
+    const viaticosResult = await conn.query(`
+      SELECT currency, SUM(dias * daily_rate) as total
+      FROM project_viaticos
+      WHERE project_id = $1 AND collaborator_id = $2
+        AND daily_rate IS NOT NULL AND currency IS NOT NULL
+      GROUP BY currency
+    `, [projectId, owner.collaborator_id]);
+    for (const row of viaticosResult.rows) {
+      if (parseFloat(row.total) > 0) {
+        await conn.query(`
+          INSERT INTO expenses (date, description, amount, currency, collaborator_id, comment, type, payment_status, auto_generated, project_id)
+          VALUES (NOW(), $1, $2, $3, $4, $5, 'Egreso', 'pendiente', TRUE, $6)
+        `, [`Viáticos proyecto: ${project.name}`, row.total, row.currency, owner.collaborator_id, comment, projectId]);
+      }
+    }
+  }
+
+  // 2. Coparticipante — 50% del 90% del subtotal en la moneda del proyecto, estado pendiente
+  const copartCollabs = owners.filter(o => o.col_condition === 'Coparticipante');
+  for (const owner of copartCollabs) {
+    const currency = project.currency || 'USD';
+    const subtotal = parseFloat(currency === 'USD' ? project.subtotal_usd : project.subtotal_uyu) || 0;
+    const amount = subtotal * 0.9 * 0.5;
+    if (amount > 0) {
+      await conn.query(`
+        INSERT INTO expenses (date, description, amount, currency, collaborator_id, comment, type, payment_status, auto_generated, project_id)
+        VALUES (NOW(), $1, $2, $3, $4, $5, 'Egreso', 'pendiente', TRUE, $6)
+      `, [
+        `Coparticipación proyecto: ${project.name}`,
+        amount, currency, owner.collaborator_id,
+        `${comment} (45% del valor del proyecto)`, projectId
+      ]);
+    }
+  }
+
+  // 3. Ingeuy — 100% del subtotal para Diego Ricca (Socio), estado pagado
+  if (project.razon_social === 'Ingeuy') {
+    const diegoResult = await conn.query(
+      "SELECT id FROM collaborators WHERE name ILIKE 'Diego Ricca' AND condition='Socio' LIMIT 1"
+    );
+    if (diegoResult.rows.length === 0) {
+      console.warn('Diego Ricca (Socio) not found - skipping Ingeuy expense generation');
+    } else {
+      const currency = project.currency || 'USD';
+      const amount = parseFloat(currency === 'USD' ? project.subtotal_usd : project.subtotal_uyu) || 0;
+      if (amount > 0) {
+        await conn.query(`
+          INSERT INTO expenses (date, description, amount, currency, collaborator_id, comment, type, payment_status, auto_generated, project_id)
+          VALUES ($1, $2, $3, $4, $5, $6, 'Egreso', 'pagado', TRUE, $7)
+        `, [
+          project.billing_date || new Date().toISOString().split('T')[0],
+          `Pago proyecto Ingeuy: ${project.name}`,
+          amount, currency, diegoResult.rows[0].id,
+          'Generado automáticamente por facturación Ingeuy', projectId
+        ]);
+      }
+    }
+  }
 }
 
 module.exports = router;

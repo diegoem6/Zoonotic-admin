@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   getProjects, getClients, getCollaborators, createProject, updateProject, deleteProject
 } from '../utils/api';
@@ -21,7 +21,7 @@ const EMPTY = {
   iva_rate: 0.22,
   subtotal_usd: '', iva_usd: '', total_usd: '',
   subtotal_uyu: '', iva_uyu: '', total_uyu: '',
-  possible_payment_date: '', actual_payment_date: '', owners: []
+  possible_payment_date: '', actual_payment_date: '', comments: '', owners: []
 };
 
 // Add 30 days to a YYYY-MM-DD string
@@ -45,6 +45,7 @@ export default function Projects() {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterRazon, setFilterRazon]   = useState('');
   const navigate = useNavigate();
+  const location = useLocation();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -54,6 +55,23 @@ export default function Projects() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    const { editId, openCreate } = location.state || {};
+    if (!editId && !openCreate) return;
+    if (openCreate) {
+      setForm(EMPTY);
+      setModal('create');
+      navigate(location.pathname, { replace: true, state: {} });
+      return;
+    }
+    if (!projects.length) return;
+    const toEdit = projects.find(pr => pr.id === editId);
+    if (toEdit) {
+      openEdit(toEdit);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [projects, location.state?.editId, location.state?.openCreate]);
 
   // Get referentes for selected client
   const selectedClient = clients.find(c => String(c.id) === String(form.client_id));
@@ -68,6 +86,7 @@ export default function Projects() {
       billing_date: p.billing_date ? p.billing_date.split('T')[0] : '',
       possible_payment_date: p.possible_payment_date ? p.possible_payment_date.split('T')[0] : '',
       actual_payment_date: p.actual_payment_date ? p.actual_payment_date.split('T')[0] : '',
+      comments: p.comments || '',
       owners: p.owners || []
     });
     setModal(p.id);
@@ -405,11 +424,25 @@ export default function Projects() {
                 <div className="form-section-title">Cobro</div>
                 <div className="form-group">
                   <label>Fecha posible de cobro <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>(auto: factura +30d)</span></label>
-                  <input type="date" value={form.possible_payment_date} onChange={e => set('possible_payment_date', e.target.value)} />
+                  <input type="date" value={form.possible_payment_date}
+                    onChange={e => set('possible_payment_date', e.target.value)}
+                    disabled={form.status !== 'Facturado' || !form.billing_date}
+                    style={{ opacity: (form.status !== 'Facturado' || !form.billing_date) ? 0.4 : 1 }} />
                 </div>
                 <div className="form-group">
                   <label>Fecha de cobro efectivo</label>
-                  <input type="date" value={form.actual_payment_date} onChange={e => set('actual_payment_date', e.target.value)} />
+                  <input type="date" value={form.actual_payment_date}
+                    onChange={e => set('actual_payment_date', e.target.value)}
+                    disabled={form.status !== 'Cobrado'}
+                    style={{ opacity: form.status !== 'Cobrado' ? 0.4 : 1 }} />
+                </div>
+
+                {/* Comments */}
+                <div className="form-section-title">Comentarios</div>
+                <div className="form-group">
+                  <textarea value={form.comments} onChange={e => set('comments', e.target.value)}
+                    placeholder="Notas u observaciones del proyecto..."
+                    rows={3} style={{ resize: 'vertical' }} />
                 </div>
               </div>
 
