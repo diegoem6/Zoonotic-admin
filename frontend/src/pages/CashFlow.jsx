@@ -218,6 +218,94 @@ export default function CashFlow() {
         </table>
       </div>
 
+      {/* Socios expenses table */}
+      {(() => {
+        // Collect unique socios present in data
+        const socioMap = {};
+        (data.socios || []).forEach(r => {
+          if (!socioMap[r.collaborator_id]) socioMap[r.collaborator_id] = r.collaborator_name;
+        });
+        const socioIds = Object.keys(socioMap);
+        if (socioIds.length === 0) return null;
+
+        // Build lookup: socioId -> month -> { egreso, devolucion }
+        const lookup = {};
+        (data.socios || []).forEach(r => {
+          if (r.currency !== currency) return;
+          const key = `${r.collaborator_id}_${r.month}`;
+          if (!lookup[key]) lookup[key] = { egreso: 0, devolucion: 0 };
+          lookup[key].egreso      += parseFloat(r.total_egreso || 0);
+          lookup[key].devolucion  += parseFloat(r.total_devolucion || 0);
+        });
+
+        const getCell = (socioId, month) => lookup[`${socioId}_${month}`] || { egreso: 0, devolucion: 0 };
+
+        // Column totals
+        const colTotals = socioIds.map(sid => {
+          const egreso     = MONTHS.reduce((a, _, i) => a + getCell(sid, i + 1).egreso, 0);
+          const devolucion = MONTHS.reduce((a, _, i) => a + getCell(sid, i + 1).devolucion, 0);
+          return { egreso, devolucion };
+        });
+
+        return (
+          <div className="card" style={{ marginTop: 24 }}>
+            <div className="card-title">Egresos por Socio — {year} ({currency})</div>
+            <div className="table-wrapper" style={{ marginTop: 0 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Mes</th>
+                    {socioIds.map(sid => (
+                      <th key={sid} colSpan={2} style={{ textAlign: 'center' }}>{socioMap[sid]}</th>
+                    ))}
+                  </tr>
+                  <tr>
+                    <th></th>
+                    {socioIds.map(sid => (
+                      <React.Fragment key={sid}>
+                        <th style={{ color: 'var(--red)', fontSize: 11 }}>Egreso</th>
+                        <th style={{ color: 'var(--green)', fontSize: 11 }}>Devolución</th>
+                      </React.Fragment>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {MONTHS.map((name, i) => {
+                    const m = i + 1;
+                    const cells = socioIds.map(sid => getCell(sid, m));
+                    const hasData = cells.some(c => c.egreso > 0 || c.devolucion > 0);
+                    return (
+                      <tr key={m} style={{ opacity: hasData ? 1 : 0.4 }}>
+                        <td style={{ fontWeight: 500 }}>{name}</td>
+                        {cells.map((c, idx) => (
+                          <React.Fragment key={socioIds[idx]}>
+                            <td className="td-mono" style={{ color: 'var(--red)' }}>
+                              {c.egreso > 0 ? fmt(c.egreso) : '—'}
+                            </td>
+                            <td className="td-mono" style={{ color: 'var(--green)' }}>
+                              {c.devolucion > 0 ? fmt(c.devolucion) : '—'}
+                            </td>
+                          </React.Fragment>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                  <tr className="total-row">
+                    <td>TOTAL {year}</td>
+                    {colTotals.map((t, idx) => (
+                      <React.Fragment key={socioIds[idx]}>
+                        <td className="td-mono" style={{ color: 'var(--red)' }}>{fmt(t.egreso)}</td>
+                        <td className="td-mono" style={{ color: 'var(--green)' }}>{fmt(t.devolucion)}</td>
+                      </React.Fragment>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
+
       {currency === 'USD' && (
         <div className="alert alert-warning" style={{ marginTop: 16 }}>
           <Icon name="info" size={14} />
