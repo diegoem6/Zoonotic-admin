@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getExpenses, createExpense, updateExpense, updateExpenseStatus, deleteExpense, getCollaborators } from '../utils/api';
+import { getExpenses, createExpense, updateExpense, updateExpenseStatus, uploadExpenseReceipt, deleteExpense, getCollaborators } from '../utils/api';
 import { fmtUSD, fmtUYU, fmtDate, CURRENCIES, EXPENSE_TYPES } from '../utils/helpers';
 import { Icon, CurrencyBadge, ConfirmDialog, Spinner, EmptyState, toast } from '../components/UI';
 
@@ -67,6 +67,11 @@ export default function Expenses() {
 
   const handleDelete = async () => {
     try { await deleteExpense(deleteId); toast('Egreso eliminado'); setDeleteId(null); load(); }
+    catch (e) { toast(e.message, 'error'); }
+  };
+
+  const handleReceiptUpload = async (expenseId, file) => {
+    try { await uploadExpenseReceipt(expenseId, file); toast('Comprobante subido'); load(); }
     catch (e) { toast(e.message, 'error'); }
   };
 
@@ -160,6 +165,7 @@ export default function Expenses() {
                 <th>Colaborador</th>
                 <th>Estado</th>
                 <th>Origen</th>
+                <th>Comprobante</th>
                 <th></th>
               </tr>
             </thead>
@@ -194,12 +200,25 @@ export default function Expenses() {
                     )}
                   </td>
                   <td>
-                    {!e.auto_generated && (
-                      <div className="row-actions">
-                        <button className="btn btn-ghost btn-icon" onClick={() => openEdit(e)}><Icon name="edit" size={14} /></button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {e.receipt_file && (
+                        <a href={e.receipt_file} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-icon" title="Ver comprobante">
+                          <Icon name="file" size={14} />
+                        </a>
+                      )}
+                      <label className="btn btn-ghost btn-icon" title="Subir comprobante" style={{ cursor: 'pointer' }}>
+                        <Icon name="upload" size={14} />
+                        <input type="file" style={{ display: 'none' }} onChange={ev => { if (ev.target.files[0]) handleReceiptUpload(e.id, ev.target.files[0]); ev.target.value = ''; }} />
+                      </label>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="row-actions">
+                      <button className="btn btn-ghost btn-icon" onClick={() => openEdit(e)}><Icon name="edit" size={14} /></button>
+                      {!e.auto_generated && (
                         <button className="btn btn-ghost btn-icon" style={{ color: 'var(--red)' }} onClick={() => setDeleteId(e.id)}><Icon name="trash" size={14} /></button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

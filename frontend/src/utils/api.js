@@ -68,6 +68,11 @@ export const createExpense         = (data)            => api.post('/expenses', 
 export const updateExpense         = (id, d)           => api.put(`/expenses/${id}`, d);
 export const updateExpenseStatus   = (id, status)      => api.patch(`/expenses/${id}/status`, { payment_status: status });
 export const deleteExpense         = (id)              => api.delete(`/expenses/${id}`);
+export const uploadExpenseReceipt  = (id, file)        => {
+  const fd = new FormData();
+  fd.append('file', file);
+  return api.post(`/expenses/${id}/receipt`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+};
 
 // TAXES
 export const getTaxes   = (params) => api.get('/taxes', { params });

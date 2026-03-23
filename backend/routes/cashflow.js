@@ -27,22 +27,6 @@ router.get('/', async (req, res) => {
       ORDER BY year DESC, month DESC
     `;
 
-    // EGRESOS DE SOCIOS by month and collaborator
-    const sociosQuery = `
-      SELECT
-        EXTRACT(MONTH FROM e.date)::int AS month,
-        col.id   AS collaborator_id,
-        col.name AS collaborator_name,
-        e.currency,
-        COALESCE(SUM(CASE WHEN e.type = 'Egreso'     THEN e.amount ELSE 0 END), 0) AS total_egreso,
-        COALESCE(SUM(CASE WHEN e.type = 'Devolución' THEN e.amount ELSE 0 END), 0) AS total_devolucion
-      FROM expenses e
-      JOIN collaborators col ON col.id = e.collaborator_id
-      WHERE col.condition = 'Socio' ${yc}
-      GROUP BY month, col.id, col.name, e.currency
-      ORDER BY month, col.name
-    `;
-
     // EGRESOS by month
     const expenseQuery = `
       SELECT
@@ -68,18 +52,35 @@ router.get('/', async (req, res) => {
       ORDER BY year DESC, month DESC
     `;
 
-    const [cobros, expenses, taxes, socios] = await Promise.all([
+    // EGRESOS DE TODOS LOS COLABORADORES by month (pagado only)
+    const collabExpensesQuery = `
+      SELECT
+        EXTRACT(MONTH FROM e.date)::int AS month,
+        col.id        AS collaborator_id,
+        col.name      AS collaborator_name,
+        col.condition AS collaborator_condition,
+        e.currency,
+        COALESCE(SUM(CASE WHEN e.type = 'Egreso'     THEN e.amount ELSE 0 END), 0) AS total_egreso,
+        COALESCE(SUM(CASE WHEN e.type = 'Devolución' THEN e.amount ELSE 0 END), 0) AS total_devolucion
+      FROM expenses e
+      JOIN collaborators col ON col.id = e.collaborator_id
+      WHERE e.payment_status = 'pagado' ${yc}
+      GROUP BY month, col.id, col.name, col.condition, e.currency
+      ORDER BY col.name, month
+    `;
+
+    const [cobros, expenses, taxes, collabExpenses] = await Promise.all([
       db.query(cobrosQuery, params),
       db.query(expenseQuery, params),
       db.query(taxQuery, params),
-      db.query(sociosQuery, params),
+      db.query(collabExpensesQuery, params),
     ]);
 
     res.json({
-      cobros:   cobros.rows,
-      expenses: expenses.rows,
-      taxes:    taxes.rows,
-      socios:   socios.rows,
+      cobros:          cobros.rows,
+      expenses:        expenses.rows,
+      taxes:           taxes.rows,
+      collab_expenses: collabExpenses.rows,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

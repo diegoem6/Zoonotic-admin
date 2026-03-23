@@ -5,10 +5,11 @@ import { Icon, LoadingPage } from '../components/UI';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 export default function CashFlow() {
-  const [data, setData]       = useState(null);
-  const [year, setYear]       = useState(currentYear);
-  const [loading, setLoading] = useState(true);
+  const [data, setData]         = useState(null);
+  const [year, setYear]         = useState(currentYear);
+  const [loading, setLoading]   = useState(true);
   const [currency, setCurrency] = useState('USD');
+  const [selectedCollab, setSelectedCollab] = useState('all');
 
   useEffect(() => {
     setLoading(true);
@@ -218,51 +219,62 @@ export default function CashFlow() {
         </table>
       </div>
 
-      {/* Socios expenses table */}
+      {/* Egresos por colaborador — tabla cruzada */}
       {(() => {
-        // Collect unique socios present in data
-        const socioMap = {};
-        (data.socios || []).forEach(r => {
-          if (!socioMap[r.collaborator_id]) socioMap[r.collaborator_id] = r.collaborator_name;
+        const collabMap = {};
+        (data.collab_expenses || []).forEach(r => {
+          if (!collabMap[r.collaborator_id]) collabMap[r.collaborator_id] = r.collaborator_name;
         });
-        const socioIds = Object.keys(socioMap);
-        if (socioIds.length === 0) return null;
+        const allCollabIds = Object.keys(collabMap).sort((a, b) => collabMap[a].localeCompare(collabMap[b]));
+        if (allCollabIds.length === 0) return null;
 
-        // Build lookup: socioId -> month -> { egreso, devolucion }
+        const collabIds = selectedCollab === 'all'
+          ? allCollabIds
+          : allCollabIds.filter(id => id === selectedCollab);
+
+        // Build lookup: collabId_month -> { egreso, devolucion }
         const lookup = {};
-        (data.socios || []).forEach(r => {
+        (data.collab_expenses || []).forEach(r => {
           if (r.currency !== currency) return;
           const key = `${r.collaborator_id}_${r.month}`;
           if (!lookup[key]) lookup[key] = { egreso: 0, devolucion: 0 };
-          lookup[key].egreso      += parseFloat(r.total_egreso || 0);
-          lookup[key].devolucion  += parseFloat(r.total_devolucion || 0);
+          lookup[key].egreso     += parseFloat(r.total_egreso     || 0);
+          lookup[key].devolucion += parseFloat(r.total_devolucion || 0);
         });
 
-        const getCell = (socioId, month) => lookup[`${socioId}_${month}`] || { egreso: 0, devolucion: 0 };
+        const getCell = (cid, month) => lookup[`${cid}_${month}`] || { egreso: 0, devolucion: 0 };
 
         // Column totals
-        const colTotals = socioIds.map(sid => {
-          const egreso     = MONTHS.reduce((a, _, i) => a + getCell(sid, i + 1).egreso, 0);
-          const devolucion = MONTHS.reduce((a, _, i) => a + getCell(sid, i + 1).devolucion, 0);
+        const colTotals = collabIds.map(cid => {
+          const egreso     = MONTHS.reduce((a, _, i) => a + getCell(cid, i + 1).egreso, 0);
+          const devolucion = MONTHS.reduce((a, _, i) => a + getCell(cid, i + 1).devolucion, 0);
           return { egreso, devolucion };
         });
 
         return (
           <div className="card" style={{ marginTop: 24 }}>
-            <div className="card-title">Egresos por Socio — {year} ({currency})</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div className="card-title" style={{ marginBottom: 0 }}>Egresos por colaborador — {year} ({currency})</div>
+              <select value={selectedCollab} onChange={e => setSelectedCollab(e.target.value)} style={{ width: 180 }}>
+                <option value="all">Todos los colaboradores</option>
+                {allCollabIds.map(id => (
+                  <option key={id} value={id}>{collabMap[id]}</option>
+                ))}
+              </select>
+            </div>
             <div className="table-wrapper" style={{ marginTop: 0 }}>
               <table>
                 <thead>
                   <tr>
                     <th>Mes</th>
-                    {socioIds.map(sid => (
-                      <th key={sid} colSpan={2} style={{ textAlign: 'center' }}>{socioMap[sid]}</th>
+                    {collabIds.map(cid => (
+                      <th key={cid} colSpan={2} style={{ textAlign: 'center' }}>{collabMap[cid]}</th>
                     ))}
                   </tr>
                   <tr>
                     <th></th>
-                    {socioIds.map(sid => (
-                      <React.Fragment key={sid}>
+                    {collabIds.map(cid => (
+                      <React.Fragment key={cid}>
                         <th style={{ color: 'var(--red)', fontSize: 11 }}>Egreso</th>
                         <th style={{ color: 'var(--green)', fontSize: 11 }}>Devolución</th>
                       </React.Fragment>
@@ -272,13 +284,13 @@ export default function CashFlow() {
                 <tbody>
                   {MONTHS.map((name, i) => {
                     const m = i + 1;
-                    const cells = socioIds.map(sid => getCell(sid, m));
+                    const cells = collabIds.map(cid => getCell(cid, m));
                     const hasData = cells.some(c => c.egreso > 0 || c.devolucion > 0);
                     return (
                       <tr key={m} style={{ opacity: hasData ? 1 : 0.4 }}>
                         <td style={{ fontWeight: 500 }}>{name}</td>
                         {cells.map((c, idx) => (
-                          <React.Fragment key={socioIds[idx]}>
+                          <React.Fragment key={collabIds[idx]}>
                             <td className="td-mono" style={{ color: 'var(--red)' }}>
                               {c.egreso > 0 ? fmt(c.egreso) : '—'}
                             </td>
@@ -293,7 +305,7 @@ export default function CashFlow() {
                   <tr className="total-row">
                     <td>TOTAL {year}</td>
                     {colTotals.map((t, idx) => (
-                      <React.Fragment key={socioIds[idx]}>
+                      <React.Fragment key={collabIds[idx]}>
                         <td className="td-mono" style={{ color: 'var(--red)' }}>{fmt(t.egreso)}</td>
                         <td className="td-mono" style={{ color: 'var(--green)' }}>{fmt(t.devolucion)}</td>
                       </React.Fragment>
@@ -305,6 +317,7 @@ export default function CashFlow() {
           </div>
         );
       })()}
+
 
       {currency === 'USD' && (
         <div className="alert alert-warning" style={{ marginTop: 16 }}>

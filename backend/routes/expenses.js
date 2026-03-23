@@ -1,6 +1,22 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Multer config for receipt uploads
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = path.join(__dirname, '../uploads/receipts');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  }
+});
+const upload = multer({ storage });
 
 // GET all expenses
 router.get('/', async (req, res) => {
@@ -42,7 +58,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PUT update expense
+// PUT update expense (all expenses including auto-generated)
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -50,9 +66,9 @@ router.put('/:id', async (req, res) => {
     const result = await db.query(`
       UPDATE expenses SET date=$1, description=$2, amount=$3, currency=$4,
         collaborator_id=$5, comment=$6, type=$7, payment_status=$8, updated_at=NOW()
-      WHERE id=$9 AND auto_generated=FALSE RETURNING *
+      WHERE id=$9 RETURNING *
     `, [date, description, amount, currency, collaborator_id || null, comment, type || 'Egreso', payment_status || 'pendiente', id]);
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Expense not found or auto-generated' });
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Expense not found' });
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -78,7 +94,24 @@ router.patch('/:id/status', async (req, res) => {
   }
 });
 
-// DELETE expense
+// POST /:id/receipt — upload payment receipt file
+router.post('/:id/receipt', upload.single('file'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const filePath = `/uploads/receipts/${req.file.filename}`;
+    const result = await db.query(
+      'UPDATE expenses SET receipt_file=$1, updated_at=NOW() WHERE id=$2 RETURNING *',
+      [filePath, id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Expense not found' });
+    res.json({ receipt_file: filePath });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE expense (only non-auto-generated)
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
