@@ -75,7 +75,16 @@ export default function Expenses() {
     catch (e) { toast(e.message, 'error'); }
   };
 
-  const filtered = expenses.filter(e => {
+  // Separar egresos parciales (hijos auto-generados) de los principales
+  const mainExpenses = expenses.filter(e => !e.is_partial);
+  const partialsByParentId = {};
+  expenses.filter(e => e.is_partial).forEach(p => {
+    if (!partialsByParentId[p.parent_expense_id]) partialsByParentId[p.parent_expense_id] = [];
+    partialsByParentId[p.parent_expense_id].push(p);
+  });
+
+  // Los filtros se aplican sólo a los egresos principales
+  const filtered = mainExpenses.filter(e => {
     const matchCollab = !filterCollab || String(e.collaborator_id) === filterCollab;
     const matchCurr = !filterCurrency || e.currency === filterCurrency;
     const matchType = !filterType || e.type === filterType;
@@ -171,7 +180,8 @@ export default function Expenses() {
             </thead>
             <tbody>
               {filtered.map(e => (
-                <tr key={e.id}>
+                <React.Fragment key={e.id}>
+                <tr>
                   <td style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{fmtDate(e.date)}</td>
                   <td style={{ fontWeight: 500, maxWidth: 200 }}>{e.description}</td>
                   <td>
@@ -183,14 +193,21 @@ export default function Expenses() {
                   <td><CurrencyBadge currency={e.currency} /></td>
                   <td style={{ color: 'var(--text-secondary)' }}>{e.collaborator_name || '—'}</td>
                   <td>
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      style={{ padding: '2px 6px' }}
-                      onClick={() => handleToggleStatus(e)}
-                      title={e.payment_status === 'pagado' ? 'Marcar como pendiente' : 'Marcar como pagado'}
-                    >
-                      <PaymentStatusBadge status={e.payment_status} />
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        style={{ padding: '2px 6px' }}
+                        onClick={() => handleToggleStatus(e)}
+                        title={e.payment_status === 'pagado' ? 'Marcar como pendiente' : 'Marcar como pagado'}
+                      >
+                        <PaymentStatusBadge status={e.payment_status} />
+                      </button>
+                      {(partialsByParentId[e.id]?.length > 0) && (
+                        <span style={{ fontSize: 10, color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>
+                          {partialsByParentId[e.id].length} pago{partialsByParentId[e.id].length > 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td>
                     {e.auto_generated ? (
@@ -221,6 +238,26 @@ export default function Expenses() {
                     </div>
                   </td>
                 </tr>
+                {(partialsByParentId[e.id] || []).map(p => (
+                  <tr key={p.id} style={{ background: 'var(--bg-elevated)', opacity: 0.9 }}>
+                    <td style={{ color: 'var(--text-muted)', fontSize: 11, paddingLeft: 28, whiteSpace: 'nowrap' }}>
+                      └ {fmtDate(p.date)}
+                    </td>
+                    <td style={{ fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic', maxWidth: 200 }}>
+                      {p.description}
+                    </td>
+                    <td><span className="badge badge-cobrado" style={{ fontSize: 10 }}>Parcial</span></td>
+                    <td className="td-mono" style={{ color: 'var(--green)', fontSize: 12 }}>
+                      {p.currency === 'USD' ? fmtUSD(p.amount) : fmtUYU(p.amount)}
+                    </td>
+                    <td><CurrencyBadge currency={p.currency} /></td>
+                    <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{p.collaborator_name || '—'}</td>
+                    <td><span className="badge badge-cobrado" style={{ fontSize: 10 }}>Pagado</span></td>
+                    <td><span className="badge badge-neutral" style={{ fontSize: 10 }}>Auto</span></td>
+                    <td /><td />
+                  </tr>
+                ))}
+                </React.Fragment>
               ))}
             </tbody>
           </table>

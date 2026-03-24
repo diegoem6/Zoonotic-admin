@@ -13,6 +13,7 @@ import Billing from './pages/Billing';
 import Expenses from './pages/Expenses';
 import Taxes from './pages/Taxes';
 import CashFlow from './pages/CashFlow';
+import Payments from './pages/Payments';
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="/expenses" element={<RequireAuth><Expenses /></RequireAuth>} />
         <Route path="/taxes" element={<RequireAuth><Taxes /></RequireAuth>} />
         <Route path="/cashflow" element={<RequireAuth><CashFlow /></RequireAuth>} />
+        <Route path="/payments" element={<RequireAuth><Payments /></RequireAuth>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <ToastProvider />

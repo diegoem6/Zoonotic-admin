@@ -32,6 +32,7 @@ app.use('/api/taxes',         auth, require('./routes/taxes'));
 app.use('/api/billing',       auth, require('./routes/billing'));
 app.use('/api/cashflow',      auth, require('./routes/cashflow'));
 app.use('/api/dolar',         auth, require('./routes/dolar'));
+app.use('/api/payments',      auth, require('./routes/payments'));
 
 app.use((err, req, res, next) => {
   console.error(err.stack);

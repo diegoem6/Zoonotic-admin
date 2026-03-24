@@ -62,6 +62,8 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const guard = await db.query('SELECT is_partial FROM expenses WHERE id=$1', [id]);
+    if (guard.rows[0]?.is_partial) return res.status(400).json({ error: 'No se puede editar un egreso parcial generado automáticamente.' });
     const { date, description, amount, currency, collaborator_id, comment, type, payment_status } = req.body;
     const result = await db.query(`
       UPDATE expenses SET date=$1, description=$2, amount=$3, currency=$4,
@@ -79,6 +81,8 @@ router.put('/:id', async (req, res) => {
 router.patch('/:id/status', async (req, res) => {
   try {
     const { id } = req.params;
+    const guard = await db.query('SELECT is_partial FROM expenses WHERE id=$1', [id]);
+    if (guard.rows[0]?.is_partial) return res.status(400).json({ error: 'No se puede modificar el estado de un egreso parcial.' });
     const { payment_status } = req.body;
     if (!['pendiente', 'pagado'].includes(payment_status)) {
       return res.status(400).json({ error: 'Estado inválido. Use pendiente o pagado.' });

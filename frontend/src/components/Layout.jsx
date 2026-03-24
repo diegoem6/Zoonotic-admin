@@ -13,6 +13,7 @@ const navItems = [
   { to: '/expenses',      icon: 'expenses',      label: 'Egresos' },
   { to: '/taxes',         icon: 'taxes',         label: 'Aportes / Impuestos' },
   { to: '/cashflow',      icon: 'cashflow',      label: 'Flujo de Caja' },
+  { to: '/payments',      icon: 'expenses',      label: 'Pagos' },
 ];
 
 function DolarWidget() {

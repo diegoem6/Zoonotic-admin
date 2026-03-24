@@ -89,6 +89,20 @@ export const getBillingByStatus = (params) => api.get('/billing/summary/by-statu
 // CASHFLOW
 export const getCashflow = (params) => api.get('/cashflow', { params });
 
+// PAYMENTS
+export const getPayments                = ()         => api.get('/payments');
+export const getPayment                 = (id)       => api.get(`/payments/${id}`);
+export const createPayment              = (data)     => api.post('/payments', data);
+export const updatePayment              = (id, data) => api.put(`/payments/${id}`, data);
+export const deletePayment              = (id)       => api.delete(`/payments/${id}`);
+export const getPendingExpenses         = (params)   => api.get('/payments/pending-expenses', { params });
+export const getPaymentExpensesForEdit  = (id)       => api.get(`/payments/${id}/expenses-for-edit`);
+export const uploadPaymentReceipt       = (id, file) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  return api.post(`/payments/${id}/receipt`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+};
+
 // DOLAR
 export const getDolar      = ()          => api.get('/dolar');
 export const setDolarManual = (rate)     => api.post('/dolar/manual', { rate });
