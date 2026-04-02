@@ -142,6 +142,14 @@ export default function ProjectDetail() {
             </div>
           </div>
 
+          {/* Comments */}
+          {project.comments && (
+            <div className="card">
+              <div className="card-title">Comentarios</div>
+              <p style={{ margin: 0, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{project.comments}</p>
+            </div>
+          )}
+
           {/* Owners */}
           <div className="card">
             <div className="card-title">Owners</div>
