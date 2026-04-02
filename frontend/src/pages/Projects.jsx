@@ -150,7 +150,7 @@ export default function Projects() {
   };
 
   const filteredProjects = projects.filter(p => {
-    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.client_name?.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.client_name?.toLowerCase().includes(search.toLowerCase()) || p.comments?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = !filterStatus || p.status === filterStatus;
     const matchRazon  = !filterRazon  || p.razon_social === filterRazon;
     return matchSearch && matchStatus && matchRazon;
@@ -178,7 +178,7 @@ export default function Projects() {
         <div style={{ position: 'relative' }}>
           <Icon name="search" size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
           <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar proyecto o cliente..." style={{ paddingLeft: 32, width: 240 }} />
+            placeholder="Buscar proyecto, cliente o comentarios..." style={{ paddingLeft: 32, width: 240 }} />
         </div>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ width: 160 }}>
           <option value="">Todos los estados</option>

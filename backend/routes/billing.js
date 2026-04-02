@@ -13,17 +13,17 @@ router.get('/summary', async (req, res) => {
     const where = 'WHERE ' + conditions.join(' AND ');
 
     const result = await db.query(`
-      SELECT 
+      SELECT
         razon_social,
         EXTRACT(YEAR FROM billing_date)::int as year,
         EXTRACT(MONTH FROM billing_date)::int as month,
         COUNT(*) as project_count,
-        COALESCE(SUM(subtotal_usd), 0) as subtotal_usd,
-        COALESCE(SUM(iva_usd), 0) as iva_usd,
-        COALESCE(SUM(total_usd), 0) as total_usd,
-        COALESCE(SUM(subtotal_uyu), 0) as subtotal_uyu,
-        COALESCE(SUM(iva_uyu), 0) as iva_uyu,
-        COALESCE(SUM(total_uyu), 0) as total_uyu
+        COALESCE(SUM(CASE WHEN currency = 'USD' THEN subtotal_usd ELSE 0 END), 0) as subtotal_usd,
+        COALESCE(SUM(CASE WHEN currency = 'USD' THEN iva_usd ELSE 0 END), 0) as iva_usd,
+        COALESCE(SUM(CASE WHEN currency = 'USD' THEN total_usd ELSE 0 END), 0) as total_usd,
+        COALESCE(SUM(CASE WHEN currency = 'UYU' THEN subtotal_uyu ELSE 0 END), 0) as subtotal_uyu,
+        COALESCE(SUM(CASE WHEN currency = 'UYU' THEN iva_uyu ELSE 0 END), 0) as iva_uyu,
+        COALESCE(SUM(CASE WHEN currency = 'UYU' THEN total_uyu ELSE 0 END), 0) as total_uyu
       FROM projects
       ${where}
       GROUP BY razon_social, EXTRACT(YEAR FROM billing_date), EXTRACT(MONTH FROM billing_date)
@@ -49,8 +49,8 @@ router.get('/summary/by-status', async (req, res) => {
         razon_social,
         status,
         EXTRACT(MONTH FROM billing_date)::int as month,
-        COALESCE(SUM(subtotal_usd), 0) as subtotal_usd,
-        COALESCE(SUM(subtotal_uyu), 0) as subtotal_uyu
+        COALESCE(SUM(CASE WHEN currency = 'USD' THEN subtotal_usd ELSE 0 END), 0) as subtotal_usd,
+        COALESCE(SUM(CASE WHEN currency = 'UYU' THEN subtotal_uyu ELSE 0 END), 0) as subtotal_uyu
       FROM projects
       ${where}
       GROUP BY razon_social, status, EXTRACT(MONTH FROM billing_date)
@@ -74,12 +74,12 @@ router.get('/summary/combined', async (req, res) => {
         EXTRACT(YEAR FROM billing_date)::int as year,
         EXTRACT(MONTH FROM billing_date)::int as month,
         COUNT(*) as project_count,
-        COALESCE(SUM(subtotal_usd), 0) as subtotal_usd,
-        COALESCE(SUM(iva_usd), 0) as iva_usd,
-        COALESCE(SUM(total_usd), 0) as total_usd,
-        COALESCE(SUM(subtotal_uyu), 0) as subtotal_uyu,
-        COALESCE(SUM(iva_uyu), 0) as iva_uyu,
-        COALESCE(SUM(total_uyu), 0) as total_uyu
+        COALESCE(SUM(CASE WHEN currency = 'USD' THEN subtotal_usd ELSE 0 END), 0) as subtotal_usd,
+        COALESCE(SUM(CASE WHEN currency = 'USD' THEN iva_usd ELSE 0 END), 0) as iva_usd,
+        COALESCE(SUM(CASE WHEN currency = 'USD' THEN total_usd ELSE 0 END), 0) as total_usd,
+        COALESCE(SUM(CASE WHEN currency = 'UYU' THEN subtotal_uyu ELSE 0 END), 0) as subtotal_uyu,
+        COALESCE(SUM(CASE WHEN currency = 'UYU' THEN iva_uyu ELSE 0 END), 0) as iva_uyu,
+        COALESCE(SUM(CASE WHEN currency = 'UYU' THEN total_uyu ELSE 0 END), 0) as total_uyu
       FROM projects
       WHERE status IN ('Facturado', 'Cobrado') AND billing_date IS NOT NULL ${yearCondition}
       GROUP BY EXTRACT(YEAR FROM billing_date), EXTRACT(MONTH FROM billing_date)
