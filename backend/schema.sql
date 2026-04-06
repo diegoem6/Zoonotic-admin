@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS taxes (
   iva NUMERIC(15,2) DEFAULT 0,
   iva_manual_override BOOLEAN DEFAULT FALSE,
   irae NUMERIC(15,2) DEFAULT 0,
+  irae_manual_override BOOLEAN DEFAULT FALSE,
   patrimonio NUMERIC(15,2) DEFAULT 0,
   bps NUMERIC(15,2) DEFAULT 0,
   notes TEXT,

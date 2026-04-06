@@ -48,14 +48,14 @@ router.get('/iva-calc', async (req, res) => {
 // POST create or upsert tax record
 router.post('/', async (req, res) => {
   try {
-    const { month, year, razon_social, iva, iva_manual_override, irae, patrimonio, bps, notes } = req.body;
+    const { month, year, razon_social, iva, iva_manual_override, irae, irae_manual_override, patrimonio, bps, notes } = req.body;
     const result = await db.query(`
-      INSERT INTO taxes (month, year, razon_social, iva, iva_manual_override, irae, patrimonio, bps, notes)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-      ON CONFLICT (month, year, razon_social) 
-      DO UPDATE SET iva=$4, iva_manual_override=$5, irae=$6, patrimonio=$7, bps=$8, notes=$9, updated_at=NOW()
+      INSERT INTO taxes (month, year, razon_social, iva, iva_manual_override, irae, irae_manual_override, patrimonio, bps, notes)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      ON CONFLICT (month, year, razon_social)
+      DO UPDATE SET iva=$4, iva_manual_override=$5, irae=$6, irae_manual_override=$7, patrimonio=$8, bps=$9, notes=$10, updated_at=NOW()
       RETURNING *
-    `, [month, year, razon_social, iva || 0, iva_manual_override || false, irae || 0, patrimonio || 0, bps || 0, notes]);
+    `, [month, year, razon_social, iva || 0, iva_manual_override || false, irae || 0, irae_manual_override || false, patrimonio || 0, bps || 0, notes]);
     res.status(201).json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -66,11 +66,11 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { iva, iva_manual_override, irae, patrimonio, bps, notes } = req.body;
+    const { iva, iva_manual_override, irae, irae_manual_override, patrimonio, bps, notes } = req.body;
     const result = await db.query(`
-      UPDATE taxes SET iva=$1, iva_manual_override=$2, irae=$3, patrimonio=$4, bps=$5, notes=$6, updated_at=NOW()
-      WHERE id=$7 RETURNING *
-    `, [iva || 0, iva_manual_override || false, irae || 0, patrimonio || 0, bps || 0, notes, id]);
+      UPDATE taxes SET iva=$1, iva_manual_override=$2, irae=$3, irae_manual_override=$4, patrimonio=$5, bps=$6, notes=$7, updated_at=NOW()
+      WHERE id=$8 RETURNING *
+    `, [iva || 0, iva_manual_override || false, irae || 0, irae_manual_override || false, patrimonio || 0, bps || 0, notes, id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
     res.json(result.rows[0]);
   } catch (err) {

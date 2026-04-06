@@ -3,7 +3,7 @@ import { getTaxes, saveTax, getIvaCalc } from '../utils/api';
 import { fmtUYU, fmtUSD, MONTHS, currentYear, currentMonth, YEARS_RANGE } from '../utils/helpers';
 import { Icon, RazonBadge, Spinner, toast } from '../components/UI';
 
-const EMPTY_TAX = { iva: '', irae: '', patrimonio: '', bps: '', notes: '', iva_manual_override: false };
+const EMPTY_TAX = { iva: '', irae: '', patrimonio: '', bps: '', notes: '', iva_manual_override: false, irae_manual_override: false };
 
 // Coeficiente IRAE según mes de pago
 const iraeCoef = (paymentMonth) => [1, 2, 3].includes(paymentMonth) ? 0.0218 : 0.0178;
@@ -37,7 +37,8 @@ export default function Taxes() {
       patrimonio: existing.patrimonio || '',
       bps: existing.bps || '',
       notes: existing.notes || '',
-      iva_manual_override: existing.iva_manual_override || false
+      iva_manual_override: existing.iva_manual_override || false,
+      irae_manual_override: existing.irae_manual_override || false,
     } : { ...EMPTY_TAX });
     setEditingKey(`${month}-${razon}`);
 
@@ -54,7 +55,7 @@ export default function Taxes() {
       setEditForm(f => ({
         ...f,
         ...(!existing?.iva_manual_override ? { iva: parseFloat(calc.total_iva_uyu || 0).toFixed(2) } : {}),
-        irae: iraeCalc,
+        ...(!existing?.irae_manual_override ? { irae: iraeCalc } : {}),
       }));
     } catch {}
   };
@@ -173,7 +174,20 @@ export default function Taxes() {
                                 )}
                               </div>
                             </td>
-                            <td><input type="number" step="0.01" value={editForm.irae} onChange={e => setEditForm(f => ({ ...f, irae: e.target.value }))} style={{ width: 110 }} /></td>
+                            <td>
+                              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                                <input type="number" step="0.01" value={editForm.irae}
+                                  onChange={e => setEditForm(f => ({ ...f, irae: e.target.value, irae_manual_override: true }))}
+                                  style={{ width: 110 }} />
+                                {calcKey && (
+                                  <button type="button" className="btn btn-ghost btn-icon"
+                                    title={`Auto: ${fmtUYU((parseFloat(calcKey.total_subtotal_uyu || 0) * iraeCoef(m)).toFixed(2))}`}
+                                    onClick={() => setEditForm(f => ({ ...f, irae: (parseFloat(calcKey.total_subtotal_uyu || 0) * iraeCoef(m)).toFixed(2), irae_manual_override: false }))}>
+                                    <Icon name="refresh" size={12} />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
                             <td><input type="number" step="0.01" value={editForm.patrimonio} onChange={e => setEditForm(f => ({ ...f, patrimonio: e.target.value }))} style={{ width: 110 }} /></td>
                             <td><input type="number" step="0.01" value={editForm.bps} onChange={e => setEditForm(f => ({ ...f, bps: e.target.value }))} style={{ width: 110 }} /></td>
                             <td className="td-mono">—</td>
@@ -190,7 +204,7 @@ export default function Taxes() {
                         ) : (
                           <>
                             <td className="td-mono">{rec ? fmtUYU(rec.iva) : '—'}{rec?.iva_manual_override ? <span style={{ color: 'var(--yellow)', fontSize: 10 }}>*</span> : ''}</td>
-                            <td className="td-mono">{rec ? fmtUYU(rec.irae) : '—'}</td>
+                            <td className="td-mono">{rec ? fmtUYU(rec.irae) : '—'}{rec?.irae_manual_override ? <span style={{ color: 'var(--yellow)', fontSize: 10 }}>*</span> : ''}</td>
                             <td className="td-mono">{rec ? fmtUYU(rec.patrimonio) : '—'}</td>
                             <td className="td-mono">{rec ? fmtUYU(rec.bps) : '—'}</td>
                             <td className="td-mono" style={{ fontWeight: 600, color: total > 0 ? 'var(--red)' : 'var(--text-muted)' }}>{total > 0 ? fmtUYU(total) : '—'}</td>
