@@ -6,9 +6,9 @@ const path = require('path');
 const fs = require('fs');
 
 // Multer config for PDF uploads
-const storage = multer.diskStorage({
+const makeStorage = (folder) => multer.diskStorage({
   destination: (req, file, cb) => {
-    const dir = path.join(__dirname, '../uploads/quotes');
+    const dir = path.join(__dirname, `../uploads/${folder}`);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     cb(null, dir);
   },
@@ -16,10 +16,12 @@ const storage = multer.diskStorage({
     cb(null, `${Date.now()}-${file.originalname}`);
   }
 });
-const upload = multer({ storage, fileFilter: (req, file, cb) => {
+const pdfFilter = (req, file, cb) => {
   if (file.mimetype === 'application/pdf') cb(null, true);
   else cb(new Error('Only PDFs allowed'));
-}});
+};
+const upload         = multer({ storage: makeStorage('quotes'),   fileFilter: pdfFilter });
+const uploadInvoice  = multer({ storage: makeStorage('invoices'), fileFilter: pdfFilter });
 
 // GET all projects
 router.get('/', async (req, res) => {
@@ -89,6 +91,7 @@ router.post('/', async (req, res) => {
       name, status, client_id, requestor, po, type, hours_estimated,
       iva_rate,
       billing_date, razon_social, invoice_number, currency,
+      dolar_at_billing,
       subtotal_usd, iva_usd, total_usd, subtotal_uyu, iva_uyu, total_uyu,
       possible_payment_date, actual_payment_date, comments, owners = []
     } = req.body;
@@ -98,14 +101,16 @@ router.post('/', async (req, res) => {
     const result = await conn.query(`
       INSERT INTO projects (name, status, client_id, requestor, po, type, hours_estimated,
         iva_rate, billing_date, razon_social, invoice_number, currency,
+        dolar_at_billing,
         subtotal_usd, iva_usd, total_usd, subtotal_uyu, iva_uyu, total_uyu,
         possible_payment_date, actual_payment_date, comments)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
       RETURNING *
     `, [name, status || 'Falta Cotizar', client_id || null, requestor, po, type, hours_estimated || null,
         iva_rate !== undefined ? iva_rate : 0.22,
         billing_date || null, razon_social, invoice_number,
-        currency, subtotal_usd || 0, iva_usd || 0, total_usd || 0,
+        currency, dolar_at_billing || null,
+        subtotal_usd || 0, iva_usd || 0, total_usd || 0,
         subtotal_uyu || 0, iva_uyu || 0, total_uyu || 0,
         possible_payment_date || null, actual_payment_date || null, comments || null]);
 
@@ -143,6 +148,7 @@ router.put('/:id', async (req, res) => {
       name, status, client_id, requestor, po, type, hours_estimated,
       iva_rate,
       billing_date, razon_social, invoice_number, currency,
+      dolar_at_billing,
       subtotal_usd, iva_usd, total_usd, subtotal_uyu, iva_uyu, total_uyu,
       possible_payment_date, actual_payment_date, comments, owners = []
     } = req.body;
@@ -157,12 +163,14 @@ router.put('/:id', async (req, res) => {
     const result = await conn.query(`
       UPDATE projects SET name=$1, status=$2, client_id=$3, requestor=$4, po=$5, type=$6,
         hours_estimated=$7, iva_rate=$8, billing_date=$9, razon_social=$10, invoice_number=$11, currency=$12,
-        subtotal_usd=$13, iva_usd=$14, total_usd=$15, subtotal_uyu=$16, iva_uyu=$17, total_uyu=$18,
-        possible_payment_date=$19, actual_payment_date=$20, comments=$21, updated_at=NOW()
-      WHERE id=$22 RETURNING *
+        dolar_at_billing=$13,
+        subtotal_usd=$14, iva_usd=$15, total_usd=$16, subtotal_uyu=$17, iva_uyu=$18, total_uyu=$19,
+        possible_payment_date=$20, actual_payment_date=$21, comments=$22, updated_at=NOW()
+      WHERE id=$23 RETURNING *
     `, [name, status, client_id || null, requestor, po, type, hours_estimated || null,
         iva_rate !== undefined ? iva_rate : 0.22,
         billing_date || null, razon_social, invoice_number, currency,
+        dolar_at_billing || null,
         subtotal_usd || 0, iva_usd || 0, total_usd || 0,
         subtotal_uyu || 0, iva_uyu || 0, total_uyu || 0,
         possible_payment_date || null, actual_payment_date || null, comments || null, id]);
@@ -213,6 +221,19 @@ router.post('/:id/quote', upload.single('file'), async (req, res) => {
     const filePath = `/uploads/quotes/${req.file.filename}`;
     await db.query('UPDATE projects SET quote_file=$1, updated_at=NOW() WHERE id=$2', [filePath, id]);
     res.json({ quote_file: filePath });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Upload invoice PDF
+router.post('/:id/invoice', uploadInvoice.single('file'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const filePath = `/uploads/invoices/${req.file.filename}`;
+    await db.query('UPDATE projects SET invoice_file=$1, updated_at=NOW() WHERE id=$2', [filePath, id]);
+    res.json({ invoice_file: filePath });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

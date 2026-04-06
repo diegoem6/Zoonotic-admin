@@ -55,6 +55,11 @@ export const uploadQuote     = (id, file) => {
   fd.append('file', file);
   return api.post(`/projects/${id}/quote`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
 };
+export const uploadInvoice   = (id, file) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  return api.post(`/projects/${id}/invoice`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+};
 export const getProjectHours    = (id)         => api.get(`/projects/${id}/hours`);
 export const addProjectHours    = (id, data)   => api.post(`/projects/${id}/hours`, data);
 export const deleteProjectHours = (id, hourId) => api.delete(`/projects/${id}/hours/${hourId}`);

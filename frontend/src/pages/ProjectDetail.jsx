@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   getProject, getProjectHours, addProjectHours, deleteProjectHours,
   getProjectViaticos, addProjectViatico, deleteProjectViatico,
-  uploadQuote, getCollaborators
+  uploadQuote, uploadInvoice, getCollaborators
 } from '../utils/api';
 import { fmtUSD, fmtUYU, fmtDate, fmtNum } from '../utils/helpers';
 import { Icon, StatusBadge, RazonBadge, CurrencyBadge, ConditionBadge, LoadingPage, ConfirmDialog, toast } from '../components/UI';
@@ -25,6 +25,7 @@ export default function ProjectDetail() {
   const [savingViatico, setSavingViatico] = useState(false);
   const [deleteViaticId, setDeleteViaticId] = useState(null);
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadingInvoice, setUploadingInvoice] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -91,6 +92,15 @@ export default function ProjectDetail() {
     try { await uploadQuote(id, file); toast('Cotización subida'); load(); }
     catch (e) { toast(e.message, 'error'); }
     setUploadingFile(false);
+  };
+
+  const handleInvoiceUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingInvoice(true);
+    try { await uploadInvoice(id, file); toast('Factura subida'); load(); }
+    catch (e) { toast(e.message, 'error'); }
+    setUploadingInvoice(false);
   };
 
   return (
@@ -332,6 +342,27 @@ export default function ProjectDetail() {
               <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
                 <Icon name="upload" size={14} /> {uploadingFile ? 'Subiendo...' : 'Subir PDF'}
                 <input type="file" accept=".pdf" style={{ display: 'none' }} onChange={handleFileUpload} disabled={uploadingFile} />
+              </label>
+            </div>
+          </div>
+
+          {/* Invoice file */}
+          <div className="card">
+            <div className="card-title">Factura (PDF)</div>
+            {project.invoice_file ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <a href={project.invoice_file} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm">
+                  <Icon name="file" size={14} /> Ver Factura
+                </a>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>PDF adjunto</span>
+              </div>
+            ) : (
+              <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Sin factura adjunta</div>
+            )}
+            <div style={{ marginTop: 12 }}>
+              <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
+                <Icon name="upload" size={14} /> {uploadingInvoice ? 'Subiendo...' : 'Subir PDF'}
+                <input type="file" accept=".pdf" style={{ display: 'none' }} onChange={handleInvoiceUpload} disabled={uploadingInvoice} />
               </label>
             </div>
           </div>

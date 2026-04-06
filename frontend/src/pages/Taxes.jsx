@@ -50,11 +50,11 @@ export default function Taxes() {
       setIvaCalc(prev => ({ ...prev, [`${month}-${razon}`]: calc }));
       // If not manually overridden, auto-fill IVA
       const coef = iraeCoef(month);
-      const subtotalUYU = parseFloat(calc.total_subtotal_uyu || 0);
+      const subtotalUYU = parseFloat(calc.total_subtotal_uyu || 0) + parseFloat(calc.total_subtotal_usd_en_uyu || 0);
       const iraeCalc = (subtotalUYU * coef).toFixed(2);
       setEditForm(f => ({
         ...f,
-        ...(!existing?.iva_manual_override ? { iva: parseFloat(calc.total_iva_uyu || 0).toFixed(2) } : {}),
+        ...(!existing?.iva_manual_override ? { iva: (parseFloat(calc.total_iva_uyu || 0) + parseFloat(calc.total_iva_usd_en_uyu || 0)).toFixed(2) } : {}),
         ...(!existing?.irae_manual_override ? { irae: iraeCalc } : {}),
       }));
     } catch {}

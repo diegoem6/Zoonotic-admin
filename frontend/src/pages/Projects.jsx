@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
-  getProjects, getClients, getCollaborators, createProject, updateProject, deleteProject
+  getProjects, getClients, getCollaborators, createProject, updateProject, deleteProject, getDolar
 } from '../utils/api';
 import {
   fmtUSD, fmtUYU, fmtDate, STATUSES, RAZONES, CURRENCIES, PROJECT_TYPES, CONDITIONS
@@ -18,7 +18,7 @@ const IVA_RATES = [
 const EMPTY = {
   name: '', status: 'Falta Cotizar', client_id: '', requestor: '', po: '', type: '',
   hours_estimated: '', billing_date: '', razon_social: '', invoice_number: '', currency: 'USD',
-  iva_rate: 0.22,
+  iva_rate: 0.22, dolar_at_billing: '',
   subtotal_usd: '', iva_usd: '', total_usd: '',
   subtotal_uyu: '', iva_uyu: '', total_uyu: '',
   possible_payment_date: '', actual_payment_date: '', comments: '', owners: []
@@ -82,19 +82,35 @@ export default function Projects() {
   const selectedClient = clients.find(c => String(c.id) === String(form.client_id));
   const referentes = selectedClient?.referentes || [];
 
-  const openCreate = () => { setForm(EMPTY); setModal('create'); };
+  const fetchAndSetDolar = async (currentForm) => {
+    if (currentForm.currency === 'USD' && !currentForm.dolar_at_billing) {
+      try {
+        const d = await getDolar();
+        if (d.rate) setForm(f => ({ ...f, dolar_at_billing: d.rate }));
+      } catch {}
+    }
+  };
+
+  const openCreate = () => {
+    setForm(EMPTY);
+    setModal('create');
+    fetchAndSetDolar(EMPTY);
+  };
   const openEdit = (p) => {
-    setForm({
+    const f = {
       ...p,
       iva_rate: p.iva_rate !== undefined ? p.iva_rate : 0.22,
       client_id: p.client_id || '',
       billing_date: p.billing_date ? p.billing_date.split('T')[0] : '',
       possible_payment_date: p.possible_payment_date ? p.possible_payment_date.split('T')[0] : '',
       actual_payment_date: p.actual_payment_date ? p.actual_payment_date.split('T')[0] : '',
+      dolar_at_billing: p.dolar_at_billing || '',
       comments: p.comments || '',
       owners: p.owners || []
-    });
+    };
+    setForm(f);
     setModal(p.id);
+    fetchAndSetDolar(f);
   };
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -379,6 +395,15 @@ export default function Projects() {
                     {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
+
+                {form.currency === 'USD' && (
+                  <div className="form-group">
+                    <label>Cotización USD al facturar <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>(UYU por USD)</span></label>
+                    <input type="number" step="0.01" value={form.dolar_at_billing}
+                      onChange={e => set('dolar_at_billing', e.target.value)}
+                      placeholder="Ej: 43.50" />
+                  </div>
+                )}
 
                 <div className="form-group">
                   <label>IVA</label>
