@@ -30,7 +30,7 @@ router.get('/iva-calc', async (req, res) => {
       SELECT
         COALESCE(SUM(CASE WHEN currency = 'UYU' THEN iva_uyu ELSE 0 END), 0) as total_iva_uyu,
         COALESCE(SUM(CASE WHEN currency = 'USD' THEN iva_usd ELSE 0 END), 0) as total_iva_usd,
-        COALESCE(SUM(CASE WHEN currency = 'USD' AND dolar_at_billing IS NOT NULL THEN iva_usd * dolar_at_billing ELSE 0 END), 0) as total_iva_usd_en_uyu,
+        COALESCE(SUM(CASE WHEN currency = 'USD' AND dolar_at_billing IS NOT NULL THEN subtotal_usd * iva_rate * dolar_at_billing ELSE 0 END), 0) as total_iva_usd_en_uyu,
         COALESCE(SUM(CASE WHEN currency = 'UYU' THEN subtotal_uyu ELSE 0 END), 0) as total_subtotal_uyu,
         COALESCE(SUM(CASE WHEN currency = 'USD' THEN subtotal_usd ELSE 0 END), 0) as total_subtotal_usd,
         COALESCE(SUM(CASE WHEN currency = 'USD' AND dolar_at_billing IS NOT NULL THEN subtotal_usd * dolar_at_billing ELSE 0 END), 0) as total_subtotal_usd_en_uyu

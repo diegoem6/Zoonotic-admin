@@ -47,7 +47,7 @@ export default function Taxes() {
     const ivaYear  = month === 1 ? year - 1 : year;
     try {
       const calc = await getIvaCalc({ month: ivaMonth, year: ivaYear, razon_social: razon });
-      setIvaCalc(prev => ({ ...prev, [`${month}-${razon}`]: calc }));
+setIvaCalc(prev => ({ ...prev, [`${month}-${razon}`]: calc }));
       // If not manually overridden, auto-fill IVA
       const coef = iraeCoef(month);
       const subtotalUYU = parseFloat(calc.total_subtotal_uyu || 0) + parseFloat(calc.total_subtotal_usd_en_uyu || 0);
@@ -167,8 +167,9 @@ export default function Taxes() {
                                   onChange={e => setEditForm(f => ({ ...f, iva: e.target.value, iva_manual_override: true }))}
                                   style={{ width: 110 }} />
                                 {calcKey && (
-                                  <button type="button" className="btn btn-ghost btn-icon" title={`Auto: ${fmtUYU(calcKey.total_iva_uyu)}`}
-                                    onClick={() => setEditForm(f => ({ ...f, iva: parseFloat(calcKey.total_iva_uyu || 0).toFixed(2), iva_manual_override: false }))}>
+                                  <button type="button" className="btn btn-ghost btn-icon"
+                                    title={`Auto: ${fmtUYU((parseFloat(calcKey.total_iva_uyu || 0) + parseFloat(calcKey.total_iva_usd_en_uyu || 0)).toFixed(2))}`}
+                                    onClick={() => setEditForm(f => ({ ...f, iva: (parseFloat(calcKey.total_iva_uyu || 0) + parseFloat(calcKey.total_iva_usd_en_uyu || 0)).toFixed(2), iva_manual_override: false }))}>
                                     <Icon name="refresh" size={12} />
                                   </button>
                                 )}
@@ -181,8 +182,8 @@ export default function Taxes() {
                                   style={{ width: 110 }} />
                                 {calcKey && (
                                   <button type="button" className="btn btn-ghost btn-icon"
-                                    title={`Auto: ${fmtUYU((parseFloat(calcKey.total_subtotal_uyu || 0) * iraeCoef(m)).toFixed(2))}`}
-                                    onClick={() => setEditForm(f => ({ ...f, irae: (parseFloat(calcKey.total_subtotal_uyu || 0) * iraeCoef(m)).toFixed(2), irae_manual_override: false }))}>
+                                    title={`Auto: ${fmtUYU(((parseFloat(calcKey.total_subtotal_uyu || 0) + parseFloat(calcKey.total_subtotal_usd_en_uyu || 0)) * iraeCoef(m)).toFixed(2))}`}
+                                    onClick={() => setEditForm(f => ({ ...f, irae: ((parseFloat(calcKey.total_subtotal_uyu || 0) + parseFloat(calcKey.total_subtotal_usd_en_uyu || 0)) * iraeCoef(m)).toFixed(2), irae_manual_override: false }))}>
                                     <Icon name="refresh" size={12} />
                                   </button>
                                 )}

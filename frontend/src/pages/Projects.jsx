@@ -99,7 +99,7 @@ export default function Projects() {
   const openEdit = (p) => {
     const f = {
       ...p,
-      iva_rate: p.iva_rate !== undefined ? p.iva_rate : 0.22,
+      iva_rate: (p.iva_rate !== undefined && p.iva_rate !== null) ? parseFloat(p.iva_rate) : 0.22,
       client_id: p.client_id || '',
       billing_date: p.billing_date ? p.billing_date.split('T')[0] : '',
       possible_payment_date: p.possible_payment_date ? p.possible_payment_date.split('T')[0] : '',
@@ -170,7 +170,7 @@ export default function Projects() {
     catch (e) { toast(e.message, 'error'); }
   };
 
-  const filteredProjects = projects.filter(p => {
+const filteredProjects = projects.filter(p => {
     const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.client_name?.toLowerCase().includes(search.toLowerCase()) || p.comments?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = !filterStatus ||
       (filterStatus === 'Pendientes'
@@ -248,7 +248,7 @@ export default function Projects() {
                   <td>{p.razon_social ? <RazonBadge razon={p.razon_social} /> : '—'}</td>
                   <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{p.type || '—'}</td>
                   <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' }}>
-                    {p.iva_rate !== null && p.iva_rate !== undefined ? `${Math.round(p.iva_rate * 100)}%` : '—'}
+                    {p.iva_rate !== null && p.iva_rate !== undefined ? `${Math.round(parseFloat(p.iva_rate) * 100)}%` : '—'}
                   </td>
                   <td className="td-mono">{p.total_usd > 0 ? fmtUSD(p.total_usd) : '—'}</td>
                   <td className="td-mono">{p.total_uyu > 0 ? fmtUYU(p.total_uyu) : '—'}</td>
