@@ -27,9 +27,11 @@ router.get('/iva-calc', async (req, res) => {
     if (!month || !year || !razon_social) return res.status(400).json({ error: 'month, year, razon_social required' });
     
     const result = await db.query(`
-      SELECT 
-        COALESCE(SUM(iva_uyu), 0) as total_iva_uyu,
-        COALESCE(SUM(iva_usd), 0) as total_iva_usd
+      SELECT
+        COALESCE(SUM(CASE WHEN currency = 'UYU' THEN iva_uyu ELSE 0 END), 0) as total_iva_uyu,
+        COALESCE(SUM(CASE WHEN currency = 'USD' THEN iva_usd ELSE 0 END), 0) as total_iva_usd,
+        COALESCE(SUM(CASE WHEN currency = 'UYU' THEN subtotal_uyu ELSE 0 END), 0) as total_subtotal_uyu,
+        COALESCE(SUM(CASE WHEN currency = 'USD' THEN subtotal_usd ELSE 0 END), 0) as total_subtotal_usd
       FROM projects
       WHERE EXTRACT(MONTH FROM billing_date) = $1
         AND EXTRACT(YEAR FROM billing_date) = $2

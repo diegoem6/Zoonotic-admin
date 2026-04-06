@@ -5,6 +5,9 @@ import { Icon, RazonBadge, Spinner, toast } from '../components/UI';
 
 const EMPTY_TAX = { iva: '', irae: '', patrimonio: '', bps: '', notes: '', iva_manual_override: false };
 
+// Coeficiente IRAE según mes de pago
+const iraeCoef = (paymentMonth) => [1, 2, 3].includes(paymentMonth) ? 0.0218 : 0.0178;
+
 export default function Taxes() {
   const [taxes, setTaxes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,14 +41,21 @@ export default function Taxes() {
     } : { ...EMPTY_TAX });
     setEditingKey(`${month}-${razon}`);
 
-    // Fetch auto IVA calculation
+    // Fetch auto IVA calculation from previous month (IVA generado en mes M se paga en mes M+1)
+    const ivaMonth = month === 1 ? 12 : month - 1;
+    const ivaYear  = month === 1 ? year - 1 : year;
     try {
-      const calc = await getIvaCalc({ month, year, razon_social: razon });
+      const calc = await getIvaCalc({ month: ivaMonth, year: ivaYear, razon_social: razon });
       setIvaCalc(prev => ({ ...prev, [`${month}-${razon}`]: calc }));
       // If not manually overridden, auto-fill IVA
-      if (!existing?.iva_manual_override) {
-        setEditForm(f => ({ ...f, iva: parseFloat(calc.total_iva_uyu || 0).toFixed(2) }));
-      }
+      const coef = iraeCoef(month);
+      const subtotalUYU = parseFloat(calc.total_subtotal_uyu || 0);
+      const iraeCalc = (subtotalUYU * coef).toFixed(2);
+      setEditForm(f => ({
+        ...f,
+        ...(!existing?.iva_manual_override ? { iva: parseFloat(calc.total_iva_uyu || 0).toFixed(2) } : {}),
+        irae: iraeCalc,
+      }));
     } catch {}
   };
 

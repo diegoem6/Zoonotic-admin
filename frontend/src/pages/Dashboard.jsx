@@ -71,16 +71,16 @@ export default function Dashboard() {
 
       {/* Stats */}
       <div className="stat-grid">
-        <div className="stat-card">
+        <Link to="/projects" state={{ filterStatus: 'En Ejecución' }} className="stat-card" style={{ textDecoration: 'none', cursor: 'pointer' }}>
           <div className="stat-label">Proyectos activos</div>
           <div className="stat-value" style={{ color: 'var(--teal)' }}>{active}</div>
           <div className="stat-sub">En Ejecución</div>
-        </div>
-        <div className="stat-card">
+        </Link>
+        <Link to="/projects" state={{ filterStatus: 'Pendientes' }} className="stat-card" style={{ textDecoration: 'none', cursor: 'pointer' }}>
           <div className="stat-label">Pendientes</div>
           <div className="stat-value" style={{ color: 'var(--yellow)' }}>{pending}</div>
           <div className="stat-sub">Falta Cotizar / OC</div>
-        </div>
+        </Link>
         <div className="stat-card">
           <div className="stat-label">Facturado (este mes)</div>
           <div className="stat-value" style={{ color: 'var(--accent)', fontSize: 18 }}>{fmtUSD(totalUSDThisMonth)}</div>
@@ -91,11 +91,11 @@ export default function Dashboard() {
           <div className="stat-value" style={{ color: 'var(--red)', fontSize: 18 }}>{fmtUSD(expUSD)}</div>
           <div className="stat-sub">{fmtUYU(expUYU)}</div>
         </div>
-        <div className="stat-card">
+        <Link to="/projects" state={{ filterStatus: 'Facturado' }} className="stat-card" style={{ textDecoration: 'none', cursor: 'pointer' }}>
           <div className="stat-label">Facturados sin cobrar</div>
           <div className="stat-value" style={{ color: 'var(--purple)' }}>{invoiced}</div>
           <div className="stat-sub">Proyectos facturados</div>
-        </div>
+        </Link>
         <div className="stat-card">
           <div className="stat-label">Total proyectos</div>
           <div className="stat-value">{projects.length}</div>

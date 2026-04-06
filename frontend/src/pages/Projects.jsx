@@ -57,7 +57,12 @@ export default function Projects() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    const { editId, openCreate } = location.state || {};
+    const { editId, openCreate, filterStatus } = location.state || {};
+    if (filterStatus) {
+      setFilterStatus(filterStatus);
+      navigate(location.pathname, { replace: true, state: {} });
+      return;
+    }
     if (!editId && !openCreate) return;
     if (openCreate) {
       setForm(EMPTY);
@@ -71,7 +76,7 @@ export default function Projects() {
       openEdit(toEdit);
       navigate(location.pathname, { replace: true, state: {} });
     }
-  }, [projects, location.state?.editId, location.state?.openCreate]);
+  }, [projects, location.state?.editId, location.state?.openCreate, location.state?.filterStatus]);
 
   // Get referentes for selected client
   const selectedClient = clients.find(c => String(c.id) === String(form.client_id));
@@ -151,7 +156,10 @@ export default function Projects() {
 
   const filteredProjects = projects.filter(p => {
     const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.client_name?.toLowerCase().includes(search.toLowerCase()) || p.comments?.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = !filterStatus || p.status === filterStatus;
+    const matchStatus = !filterStatus ||
+      (filterStatus === 'Pendientes'
+        ? (p.status === 'Falta Cotizar' || p.status === 'Falta OC')
+        : p.status === filterStatus);
     const matchRazon  = !filterRazon  || p.razon_social === filterRazon;
     return matchSearch && matchStatus && matchRazon;
   });
