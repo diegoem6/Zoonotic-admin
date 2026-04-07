@@ -25,9 +25,16 @@ export default function Dashboard() {
 
   if (loading) return <LoadingPage />;
 
-  const active = projects.filter(p => p.status === 'En Ejecución').length;
-  const pending = projects.filter(p => p.status === 'Falta Cotizar' || p.status === 'Falta OC').length;
-  const invoiced = projects.filter(p => p.status === 'Facturado').length;
+  const activeProjects = projects.filter(p => p.status === 'En Ejecución');
+  const pendingProjects = projects.filter(p => p.status === 'Falta Cotizar' || p.status === 'Falta OC');
+  const invoicedProjects = projects.filter(p => p.status === 'Facturado');
+
+  const active = activeProjects.length;
+  const pending = pendingProjects.length;
+  const invoiced = invoicedProjects.length;
+
+  const sumUSD = list => list.reduce((a, p) => a + parseFloat(p.subtotal_usd || 0), 0);
+  const sumUYU = list => list.reduce((a, p) => a + parseFloat(p.subtotal_uyu || 0), 0);
 
   // Current month billing
   const thisMonthBilling = billing.filter(b => b.month === currentMonth && b.year === currentYear);
@@ -50,8 +57,10 @@ export default function Dashboard() {
     const monthBilling = billing.filter(b => b.month === m && b.year === y);
     return {
       name: MONTHS[m - 1].slice(0, 3),
-      Zoonotic: monthBilling.filter(b => b.razon_social === 'Zoonotic').reduce((a, b) => a + parseFloat(b.subtotal_usd || 0), 0),
-      Ingeuy: monthBilling.filter(b => b.razon_social === 'Ingeuy').reduce((a, b) => a + parseFloat(b.subtotal_usd || 0), 0),
+      ZonoticUSD: monthBilling.filter(b => b.razon_social === 'Zoonotic').reduce((a, b) => a + parseFloat(b.subtotal_usd || 0), 0),
+      IngeuyUSD: monthBilling.filter(b => b.razon_social === 'Ingeuy').reduce((a, b) => a + parseFloat(b.subtotal_usd || 0), 0),
+      ZonoticUYU: monthBilling.filter(b => b.razon_social === 'Zoonotic').reduce((a, b) => a + parseFloat(b.subtotal_uyu || 0), 0),
+      IngeuyUYU: monthBilling.filter(b => b.razon_social === 'Ingeuy').reduce((a, b) => a + parseFloat(b.subtotal_uyu || 0), 0),
     };
   });
 
@@ -75,11 +84,15 @@ export default function Dashboard() {
           <div className="stat-label">Proyectos activos</div>
           <div className="stat-value" style={{ color: 'var(--teal)' }}>{active}</div>
           <div className="stat-sub">En Ejecución</div>
+          {sumUSD(activeProjects) > 0 && <div className="stat-sub" style={{ color: 'var(--accent)' }}>{fmtUSD(sumUSD(activeProjects))}</div>}
+          {sumUYU(activeProjects) > 0 && <div className="stat-sub" style={{ color: 'var(--teal)' }}>{fmtUYU(sumUYU(activeProjects))}</div>}
         </Link>
         <Link to="/projects" state={{ filterStatus: 'Pendientes' }} className="stat-card" style={{ textDecoration: 'none', cursor: 'pointer' }}>
           <div className="stat-label">Pendientes</div>
           <div className="stat-value" style={{ color: 'var(--yellow)' }}>{pending}</div>
           <div className="stat-sub">Falta Cotizar / OC</div>
+          {sumUSD(pendingProjects) > 0 && <div className="stat-sub" style={{ color: 'var(--accent)' }}>{fmtUSD(sumUSD(pendingProjects))}</div>}
+          {sumUYU(pendingProjects) > 0 && <div className="stat-sub" style={{ color: 'var(--teal)' }}>{fmtUYU(sumUYU(pendingProjects))}</div>}
         </Link>
         <div className="stat-card">
           <div className="stat-label">Facturado (este mes)</div>
@@ -95,6 +108,8 @@ export default function Dashboard() {
           <div className="stat-label">Facturados sin cobrar</div>
           <div className="stat-value" style={{ color: 'var(--purple)' }}>{invoiced}</div>
           <div className="stat-sub">Proyectos facturados</div>
+          {sumUSD(invoicedProjects) > 0 && <div className="stat-sub" style={{ color: 'var(--accent)' }}>{fmtUSD(sumUSD(invoicedProjects))}</div>}
+          {sumUYU(invoicedProjects) > 0 && <div className="stat-sub" style={{ color: 'var(--teal)' }}>{fmtUYU(sumUYU(invoicedProjects))}</div>}
         </Link>
         <div className="stat-card">
           <div className="stat-label">Total proyectos</div>
@@ -104,24 +119,48 @@ export default function Dashboard() {
       </div>
 
       {/* Chart */}
-      <div className="card mb-6" style={{ marginBottom: 24 }}>
-        <div className="card-title">Facturación últimos 6 meses (USD subtotal)</div>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={chartData} barGap={4}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="name" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `$${v >= 1000 ? (v/1000).toFixed(0)+'k' : v}`} />
-            <Tooltip
-              contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
-              formatter={(v, name) => [fmtUSD(v), name]}
-            />
-            <Bar dataKey="Zoonotic" fill="var(--teal)" radius={[4,4,0,0]} />
-            <Bar dataKey="Ingeuy" fill="var(--purple)" radius={[4,4,0,0]} />
-          </BarChart>
-        </ResponsiveContainer>
-        <div style={{ display: 'flex', gap: 20, marginTop: 8, fontSize: 12 }}>
-          <span style={{ color: 'var(--teal)' }}>■ Zoonotic</span>
-          <span style={{ color: 'var(--purple)' }}>■ Ingeuy</span>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+        {/* Chart USD */}
+        <div className="card">
+          <div className="card-title">Facturación últimos 6 meses — USD</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={chartData} barGap={4}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="name" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `$${v >= 1000 ? (v/1000).toFixed(0)+'k' : v}`} />
+              <Tooltip
+                contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
+                formatter={(v, name) => [fmtUSD(v), name.replace('USD', '')]}
+              />
+              <Bar dataKey="ZonoticUSD" name="ZonoticUSD" fill="var(--teal)" radius={[4,4,0,0]} />
+              <Bar dataKey="IngeuyUSD" name="IngeuyUSD" fill="var(--purple)" radius={[4,4,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
+          <div style={{ display: 'flex', gap: 20, marginTop: 8, fontSize: 12 }}>
+            <span style={{ color: 'var(--teal)' }}>■ Zoonotic</span>
+            <span style={{ color: 'var(--purple)' }}>■ Ingeuy</span>
+          </div>
+        </div>
+        {/* Chart UYU */}
+        <div className="card">
+          <div className="card-title">Facturación últimos 6 meses — UYU</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={chartData} barGap={4}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="name" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `$${v >= 1000 ? (v/1000).toFixed(0)+'k' : v}`} />
+              <Tooltip
+                contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
+                formatter={(v, name) => [fmtUYU(v), name.replace('UYU', '')]}
+              />
+              <Bar dataKey="ZonoticUYU" name="ZonoticUYU" fill="var(--teal)" radius={[4,4,0,0]} />
+              <Bar dataKey="IngeuyUYU" name="IngeuyUYU" fill="var(--purple)" radius={[4,4,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
+          <div style={{ display: 'flex', gap: 20, marginTop: 8, fontSize: 12 }}>
+            <span style={{ color: 'var(--teal)' }}>■ Zoonotic</span>
+            <span style={{ color: 'var(--purple)' }}>■ Ingeuy</span>
+          </div>
         </div>
       </div>
 
